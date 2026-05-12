@@ -45,8 +45,8 @@ object TimestampQueries {
       departmentId: Int,
       createdAt: LocalDateTime
   )(implicit c: Connection): Int =
-    SQL"""UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at)
-          VALUES ($id, $firstName, $lastName, $email, $hireDate, $salary, $departmentId, true, $createdAt)"""
+    SQL"""UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at, bonus_multiplier)
+          VALUES ($id, $firstName, $lastName, $email, $hireDate, $salary, $departmentId, true, $createdAt, 1.0)"""
       .executeUpdate()
 
   def countEmployeesCreatedOnDate(year: Int, month: Int, day: Int)(

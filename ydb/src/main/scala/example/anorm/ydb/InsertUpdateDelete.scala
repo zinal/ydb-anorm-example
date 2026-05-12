@@ -29,11 +29,13 @@ object InsertUpdateDelete {
       hireDate: LocalDate,
       salary: Double,
       departmentId: Int,
-      createdAt: LocalDateTime
+      createdAt: LocalDateTime,
+      rating: Option[Double] = None,
+      bonusMultiplier: Double = 1.0
   )(implicit c: Connection): Int =
     SQL(
-      """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at)
-         VALUES ({id}, {fn}, {ln}, {email}, {hd}, {sal}, {did}, true, {cat})"""
+      """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at, rating, bonus_multiplier)
+         VALUES ({id}, {fn}, {ln}, {email}, {hd}, {sal}, {did}, true, {cat}, {rat}, {bm})"""
     ).on(
         "id"    -> id,
         "fn"    -> firstName,
@@ -42,7 +44,9 @@ object InsertUpdateDelete {
         "hd"    -> hireDate,
         "sal"   -> salary,
         "did"   -> departmentId,
-        "cat"   -> createdAt
+        "cat"   -> createdAt,
+        "rat"   -> rating,
+        "bm"    -> bonusMultiplier
       )
       .executeUpdate()
 

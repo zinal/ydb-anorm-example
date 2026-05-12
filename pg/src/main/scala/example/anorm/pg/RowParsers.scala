@@ -30,9 +30,11 @@ object RowParsers {
       get[Option[Int]]("department_id") ~
       bool("is_active") ~
       get[Option[String]]("notes") ~
-      get[LocalDateTime]("created_at") map {
-        case id ~ fn ~ ln ~ email ~ hd ~ sal ~ did ~ active ~ notes ~ cat =>
-          Employee(id, fn, ln, email, hd, sal, did, active, notes, cat)
+      get[LocalDateTime]("created_at") ~
+      get[Option[Double]]("rating") ~
+      get[Double]("bonus_multiplier") map {
+        case id ~ fn ~ ln ~ email ~ hd ~ sal ~ did ~ active ~ notes ~ cat ~ rat ~ bm =>
+          Employee(id, fn, ln, email, hd, sal, did, active, notes, cat, rat, bm)
       }
 
   val nameAndSalaryParser: RowParser[(String, BigDecimal)] =
@@ -54,7 +56,8 @@ object RowParsers {
 
   def getEmployeeById(id: Int)(implicit c: Connection): Option[Employee] =
     SQL"""SELECT id, first_name, last_name, email, hire_date, salary,
-                 department_id, is_active, notes, created_at
+                 department_id, is_active, notes, created_at,
+                 rating, bonus_multiplier
           FROM employees WHERE id = $id"""
       .as(employeeParser.singleOpt)
 
@@ -65,7 +68,8 @@ object RowParsers {
   def getEmployeeWithDepartment(empId: Int)(implicit c: Connection): Option[EmployeeWithDepartment] =
     SQL"""SELECT e.id, e.first_name, e.last_name, e.email, e.hire_date,
                  e.salary, e.department_id, e.is_active, e.notes,
-                 e.created_at, d.name AS dept_name
+                 e.created_at, e.rating, e.bonus_multiplier,
+                 d.name AS dept_name
           FROM employees e
           JOIN departments d ON e.department_id = d.id
           WHERE e.id = $empId"""

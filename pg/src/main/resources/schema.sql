@@ -6,16 +6,18 @@ CREATE TABLE departments (
 );
 
 CREATE TABLE employees (
-    id              SERIAL PRIMARY KEY,
-    first_name      VARCHAR(50) NOT NULL,
-    last_name       VARCHAR(50) NOT NULL,
-    email           VARCHAR(100) NOT NULL UNIQUE,
-    hire_date       DATE NOT NULL,
-    salary          NUMERIC(12,2) NOT NULL,
-    department_id   INTEGER REFERENCES departments(id),
-    is_active       BOOLEAN NOT NULL DEFAULT true,
-    notes           TEXT,
-    created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+    id                SERIAL PRIMARY KEY,
+    first_name        VARCHAR(50) NOT NULL,
+    last_name         VARCHAR(50) NOT NULL,
+    email             VARCHAR(100) NOT NULL UNIQUE,
+    hire_date         DATE NOT NULL,
+    salary            NUMERIC(12,2) NOT NULL,
+    department_id     INTEGER REFERENCES departments(id),
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    notes             TEXT,
+    created_at        TIMESTAMP NOT NULL DEFAULT NOW(),
+    rating            DOUBLE PRECISION,
+    bonus_multiplier  DOUBLE PRECISION NOT NULL DEFAULT 1.0
 );
 
 CREATE TABLE projects (

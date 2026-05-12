@@ -19,7 +19,9 @@ case class Employee(
     departmentId: Option[Int],
     isActive: Boolean,
     notes: Option[String],
-    createdAt: LocalDateTime
+    createdAt: LocalDateTime,
+    rating: Option[Double],
+    bonusMultiplier: Double
 )
 
 case class Project(

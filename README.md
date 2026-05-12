@@ -31,6 +31,7 @@ Each feature lives in its own module under `pg/src/main/scala/example/anorm/pg/`
 | **Transactions** | Manual commit/rollback, business-rule validation inside a transaction, JDBC savepoints |
 | **BatchOperations** | `BatchSql` for batch inserts and updates |
 | **TimestampQueries** | Working with `TIMESTAMP` columns: fetching, inserting with explicit timestamps, range-based filtering, aggregate MIN/MAX |
+| **FloatingPointQueries** | Working with `DOUBLE PRECISION` columns: nullable and non-null `Double` values, insert/select/update, range filtering, NULL handling, aggregates (AVG, SUM, MAX) |
 
 ### Prerequisites
 
@@ -46,7 +47,7 @@ sbt compile
 sbt test
 ```
 
-The test suite (`AnormPgSpec`) starts a PostgreSQL 16 Alpine container, populates the schema and seed data before each test, and runs 55 test cases that exercise every demo module.
+The test suite (`AnormPgSpec`) starts a PostgreSQL 16 Alpine container, populates the schema and seed data before each test, and runs 69 test cases that exercise every demo module.
 
 ### Schema
 
@@ -70,7 +71,7 @@ A port of the PostgreSQL example targeting [YDB](https://ydb.tech/) — a distri
 
 ### Features Covered
 
-All 9 Anorm feature modules from the PostgreSQL version are ported, plus two YDB-specific additions:
+All Anorm feature modules from the PostgreSQL version are ported, plus two YDB-specific additions:
 
 | Module | What it demonstrates |
 |---|---|
@@ -86,6 +87,7 @@ All 9 Anorm feature modules from the PostgreSQL version are ported, plus two YDB
 | **Transactions** | Manual commit/rollback, business-rule validation; retry pattern demonstrated in tests |
 | **BatchOperations** | `BatchSql` for batch upserts and updates |
 | **TimestampQueries** | Working with `Timestamp64` columns: fetching, inserting with explicit timestamps, range-based filtering, aggregate MIN/MAX |
+| **FloatingPointQueries** | Working with `Double` columns: nullable and non-null values, insert/select/update, range filtering, NULL handling, aggregates (AVG, SUM, MAX) |
 
 ### Retry Configuration
 
@@ -129,7 +131,7 @@ sbt compile
 sbt test
 ```
 
-The test suite (`AnormYdbSpec`) starts a `ydbplatform/local-ydb` container following the [YDB Java SDK](https://github.com/ydb-platform/ydb-java-sdk/tree/master/tests) container initialization pattern (fixed port mapping, `Wait.forHealthcheck()`, hostname set to `localhost` for discovery), then runs 58 test cases covering all demo modules plus the retry utility.
+The test suite (`AnormYdbSpec`) starts a `ydbplatform/local-ydb` container following the [YDB Java SDK](https://github.com/ydb-platform/ydb-java-sdk/tree/master/tests) container initialization pattern (fixed port mapping, `Wait.forHealthcheck()`, hostname set to `localhost` for discovery), then runs 72 test cases covering all demo modules plus the retry utility.
 
 ### Schema
 

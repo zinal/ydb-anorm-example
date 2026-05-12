@@ -117,6 +117,10 @@ class AnormPgSpec extends AnyFunSuite with ForAllTestContainer with BeforeAndAft
       assert(alice.get.lastName === "Smith")
       assert(alice.get.salary === BigDecimal(95000))
       assert(alice.get.isActive === true)
+      assert(alice.get.hireDate === LocalDate.of(2020, 1, 15))
+      assert(alice.get.createdAt === LocalDateTime.of(2020, 1, 15, 9, 0, 0))
+      assert(alice.get.rating === Some(4.5))
+      assert(alice.get.bonusMultiplier === 1.15)
 
       assert(RowParsers.getEmployeeById(999) === None)
     }
@@ -137,6 +141,8 @@ class AnormPgSpec extends AnyFunSuite with ForAllTestContainer with BeforeAndAft
       assert(result.isDefined)
       assert(result.get.employee.firstName === "Alice")
       assert(result.get.departmentName === "Engineering")
+      assert(result.get.employee.hireDate === LocalDate.of(2020, 1, 15))
+      assert(result.get.employee.createdAt === LocalDateTime.of(2020, 1, 15, 9, 0, 0))
     }
   }
 
@@ -256,14 +262,17 @@ class AnormPgSpec extends AnyFunSuite with ForAllTestContainer with BeforeAndAft
 
   test("InsertUpdateDelete - insertEmployee (named params)") {
     withConnection { implicit c =>
+      val hireDate = LocalDate.of(2024, 1, 1)
       val id = InsertUpdateDelete.insertEmployee(
         "Grace", "Hopper", "grace@example.com",
-        LocalDate.of(2024, 1, 1), BigDecimal(120000), 1
+        hireDate, BigDecimal(120000), 1
       )
       assert(id.isDefined)
       val emp = RowParsers.getEmployeeById(id.get.toInt)
       assert(emp.isDefined)
       assert(emp.get.firstName === "Grace")
+      assert(emp.get.hireDate === hireDate)
+      assert(emp.get.createdAt !== null)
     }
   }
 
@@ -569,6 +578,136 @@ class AnormPgSpec extends AnyFunSuite with ForAllTestContainer with BeforeAndAft
       val alice = RowParsers.getEmployeeById(1)
       assert(alice.isDefined)
       assert(alice.get.createdAt === LocalDateTime.of(2020, 1, 15, 9, 0, 0))
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // FloatingPointQueries
+  // ---------------------------------------------------------------------------
+
+  test("FloatingPointQueries - getRating (nullable Double)") {
+    withConnection { implicit c =>
+      assert(FloatingPointQueries.getRating(1) === Some(4.5))
+      assert(FloatingPointQueries.getRating(4) === Some(4.9))
+      assert(FloatingPointQueries.getRating(5) === None) // Eve has no rating
+    }
+  }
+
+  test("FloatingPointQueries - getBonusMultiplier (non-null Double)") {
+    withConnection { implicit c =>
+      assert(FloatingPointQueries.getBonusMultiplier(1) === 1.15)
+      assert(FloatingPointQueries.getBonusMultiplier(4) === 1.25)
+      assert(FloatingPointQueries.getBonusMultiplier(5) === 1.0)
+      assert(FloatingPointQueries.getBonusMultiplier(6) === 0.95)
+    }
+  }
+
+  test("FloatingPointQueries - getNamesAndRatings (nullable column listing)") {
+    withConnection { implicit c =>
+      val all = FloatingPointQueries.getNamesAndRatings()
+      assert(all.length === 6)
+      assert(all.find(_._1 == "Alice").get._2 === Some(4.5))
+      assert(all.find(_._1 == "Eve").get._2 === None)
+    }
+  }
+
+  test("FloatingPointQueries - findByMinRating (filter Double >=)") {
+    withConnection { implicit c =>
+      val top = FloatingPointQueries.findByMinRating(4.0)
+      assert(top.map(_._1) === List("Dave", "Alice", "Bob"))
+      assert(top.head._2 === 4.9)
+    }
+  }
+
+  test("FloatingPointQueries - findByRatingRange (filter Double between)") {
+    withConnection { implicit c =>
+      val mid = FloatingPointQueries.findByRatingRange(3.5, 4.3)
+      assert(mid.map(_._1) === List("Carol", "Bob"))
+      assert(mid.head._2 === 3.8)
+      assert(mid.last._2 === 4.2)
+    }
+  }
+
+  test("FloatingPointQueries - findByBonusMultiplierAbove (filter Double >)") {
+    withConnection { implicit c =>
+      val above = FloatingPointQueries.findByBonusMultiplierAbove(1.0)
+      assert(above.map(_._1) === List("Dave", "Alice", "Bob", "Carol"))
+      assert(above.head._2 === 1.25)
+    }
+  }
+
+  test("FloatingPointQueries - findWithNullRating / findWithNonNullRating") {
+    withConnection { implicit c =>
+      assert(FloatingPointQueries.findWithNullRating() === List("Eve"))
+      assert(FloatingPointQueries.findWithNonNullRating().length === 5)
+    }
+  }
+
+  test("FloatingPointQueries - averageRating (aggregate on nullable Double)") {
+    withConnection { implicit c =>
+      val avg = FloatingPointQueries.averageRating()
+      assert(avg.isDefined)
+      assert(math.abs(avg.get - 4.12) < 0.01)
+    }
+  }
+
+  test("FloatingPointQueries - sumBonusMultipliers (aggregate on non-null Double)") {
+    withConnection { implicit c =>
+      val total = FloatingPointQueries.sumBonusMultipliers()
+      assert(math.abs(total - 6.5) < 0.01)
+    }
+  }
+
+  test("FloatingPointQueries - maxRating") {
+    withConnection { implicit c =>
+      assert(FloatingPointQueries.maxRating() === Some(4.9))
+    }
+  }
+
+  test("FloatingPointQueries - updateRating (set and clear)") {
+    withConnection { implicit c =>
+      FloatingPointQueries.updateRating(5, Some(3.7))
+      assert(FloatingPointQueries.getRating(5) === Some(3.7))
+
+      FloatingPointQueries.updateRating(1, None)
+      assert(FloatingPointQueries.getRating(1) === None)
+    }
+  }
+
+  test("FloatingPointQueries - updateBonusMultiplier") {
+    withConnection { implicit c =>
+      FloatingPointQueries.updateBonusMultiplier(2, 1.30)
+      assert(FloatingPointQueries.getBonusMultiplier(2) === 1.30)
+    }
+  }
+
+  test("FloatingPointQueries - insertEmployeeWithDoubles") {
+    withConnection { implicit c =>
+      val id = FloatingPointQueries.insertEmployeeWithDoubles(
+        "Grace", "Hopper", "grace@example.com",
+        LocalDate.of(2024, 1, 1), BigDecimal(120000), 1,
+        Some(4.7), 1.20
+      )
+      assert(id.isDefined)
+      val emp = RowParsers.getEmployeeById(id.get.toInt)
+      assert(emp.isDefined)
+      assert(emp.get.rating === Some(4.7))
+      assert(emp.get.bonusMultiplier === 1.20)
+    }
+  }
+
+  test("FloatingPointQueries - insertEmployeeWithDoubles (null rating)") {
+    withConnection { implicit c =>
+      val id = FloatingPointQueries.insertEmployeeWithDoubles(
+        "Null", "Rating", "null.rating@example.com",
+        LocalDate.of(2024, 2, 1), BigDecimal(80000), 2,
+        None, 1.0
+      )
+      assert(id.isDefined)
+      val emp = RowParsers.getEmployeeById(id.get.toInt)
+      assert(emp.isDefined)
+      assert(emp.get.rating === None)
+      assert(emp.get.bonusMultiplier === 1.0)
     }
   }
 }

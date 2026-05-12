@@ -7,16 +7,18 @@ CREATE TABLE departments (
 );
 
 CREATE TABLE employees (
-    id              Int32 NOT NULL,
-    first_name      Text  NOT NULL,
-    last_name       Text  NOT NULL,
-    email           Text  NOT NULL,
-    hire_date       Date32 NOT NULL,
-    salary          Double NOT NULL,
-    department_id   Int32,
-    is_active       Bool  NOT NULL,
-    notes           Text,
-    created_at      Timestamp64 NOT NULL,
+    id                Int32 NOT NULL,
+    first_name        Text  NOT NULL,
+    last_name         Text  NOT NULL,
+    email             Text  NOT NULL,
+    hire_date         Date32 NOT NULL,
+    salary            Double NOT NULL,
+    department_id     Int32,
+    is_active         Bool  NOT NULL,
+    notes             Text,
+    created_at        Timestamp64 NOT NULL,
+    rating            Double,
+    bonus_multiplier  Double NOT NULL,
     PRIMARY KEY (id)
 );
 
