@@ -3,6 +3,7 @@ package example.anorm.ydb
 import java.sql.Connection
 import anorm._
 import anorm.SqlParser._
+import YdbColumnAdapters._
 
 /** Demonstrates fundamental Anorm query patterns against YDB: scalar queries,
   * single/optional row retrieval, list results, and SQL string interpolation.
@@ -24,8 +25,8 @@ object BasicQueries {
     SQL"SELECT count(*) FROM departments WHERE name = $name"
       .as(scalar[Long].single) > 0
 
-  def findDepartmentWithMaxBudget()(implicit c: Connection): Option[(String, Double)] = {
-    val parser = str("name") ~ get[Double]("budget") map {
+  def findDepartmentWithMaxBudget()(implicit c: Connection): Option[(String, BigDecimal)] = {
+    val parser = str("name") ~ get[BigDecimal]("budget") map {
       case n ~ b => (n, b)
     }
     SQL"SELECT name, budget FROM departments ORDER BY budget DESC LIMIT 1"
@@ -40,7 +41,7 @@ object BasicQueries {
           ORDER BY e.email"""
       .as(str("email").*)
 
-  def getScalarBudgetSum()(implicit c: Connection): Double =
-    SQL"SELECT COALESCE(SUM(budget), 0.0) FROM departments"
-      .as(scalar[Double].single)
+  def getScalarBudgetSum()(implicit c: Connection): BigDecimal =
+    SQL"""SELECT COALESCE(SUM(budget), Decimal("0", 15, 2)) AS total FROM departments"""
+      .as(get[BigDecimal]("total").single)
 }

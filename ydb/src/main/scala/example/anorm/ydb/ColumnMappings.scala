@@ -3,6 +3,7 @@ package example.anorm.ydb
 import java.sql.{Connection, PreparedStatement}
 import anorm._
 import anorm.SqlParser._
+import YdbColumnAdapters._
 
 /** Demonstrates custom Column parsers and ToStatement instances for
   * user-defined types, value-level transformations inside parsers,
@@ -35,15 +36,15 @@ object ColumnMappings {
   case object Senior    extends SalaryLevel
   case object Principal extends SalaryLevel
 
-  private def classifySalary(salary: Double): SalaryLevel = salary match {
-    case s if s < 70000  => Junior
-    case s if s < 90000  => Mid
-    case s if s < 110000 => Senior
-    case _               => Principal
+  private def classifySalary(salary: BigDecimal): SalaryLevel = salary match {
+    case s if s < BigDecimal(70000)  => Junior
+    case s if s < BigDecimal(90000)  => Mid
+    case s if s < BigDecimal(110000) => Senior
+    case _                           => Principal
   }
 
   val salaryLevelParser: RowParser[(String, SalaryLevel)] =
-    str("first_name") ~ get[Double]("salary") map {
+    str("first_name") ~ get[BigDecimal]("salary") map {
       case name ~ salary => (name, classifySalary(salary))
     }
 

@@ -82,15 +82,21 @@ object FloatingPointQueries {
       lastName: String,
       email: String,
       hireDate: LocalDate,
-      salary: Double,
+      salary: BigDecimal,
       departmentId: Int,
       createdAt: LocalDateTime,
       rating: Option[Double],
       bonusMultiplier: Double
   )(implicit c: Connection): Int =
-    SQL"""UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary,
-            department_id, is_active, created_at, rating, bonus_multiplier)
-          VALUES ($id, $firstName, $lastName, $email, $hireDate, $salary,
-            $departmentId, true, $createdAt, $rating, $bonusMultiplier)"""
+    SQL(
+      """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary,
+              department_id, is_active, created_at, rating, bonus_multiplier)
+            VALUES ({id}, {fn}, {ln}, {email}, {hd}, CAST({sal} AS Decimal(12,2)),
+              {did}, true, {cat}, {rat}, {bm})"""
+    ).on(
+        "id" -> id, "fn" -> firstName, "ln" -> lastName, "email" -> email,
+        "hd" -> hireDate, "sal" -> salary, "did" -> departmentId,
+        "cat" -> createdAt, "rat" -> rating, "bm" -> bonusMultiplier
+      )
       .executeUpdate()
 }

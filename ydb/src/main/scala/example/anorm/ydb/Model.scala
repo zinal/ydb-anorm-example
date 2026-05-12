@@ -6,7 +6,7 @@ case class Department(
     id: Int,
     name: String,
     location: Option[String],
-    budget: Double
+    budget: BigDecimal
 )
 
 case class Employee(
@@ -15,7 +15,7 @@ case class Employee(
     lastName: String,
     email: String,
     hireDate: LocalDate,
-    salary: Double,
+    salary: BigDecimal,
     departmentId: Option[Int],
     isActive: Boolean,
     notes: Option[String],
@@ -27,7 +27,7 @@ case class Employee(
 case class Project(
     id: Int,
     name: String,
-    budget: Option[Double],
+    budget: Option[BigDecimal],
     startDate: LocalDate,
     endDate: Option[LocalDate],
     description: Option[String]

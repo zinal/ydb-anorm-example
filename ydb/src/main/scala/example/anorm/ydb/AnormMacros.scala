@@ -14,7 +14,7 @@ import YdbColumnAdapters._
   */
 object AnormMacros {
 
-  case class DepartmentRow(id: Int, name: String, location: Option[String], budget: Double)
+  case class DepartmentRow(id: Int, name: String, location: Option[String], budget: BigDecimal)
   implicit val departmentRowParser: RowParser[DepartmentRow] = Macro.namedParser[DepartmentRow]
 
   case class EmployeeRow(
@@ -23,7 +23,7 @@ object AnormMacros {
       lastName: String,
       email: String,
       hireDate: LocalDate,
-      salary: Double,
+      salary: BigDecimal,
       departmentId: Option[Int],
       isActive: Boolean,
       notes: Option[String]

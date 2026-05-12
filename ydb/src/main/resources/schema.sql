@@ -2,7 +2,7 @@ CREATE TABLE departments (
     id          Int32 NOT NULL,
     name        Text  NOT NULL,
     location    Text,
-    budget      Double NOT NULL,
+    budget      Decimal(15,2) NOT NULL,
     PRIMARY KEY (id)
 );
 
@@ -12,7 +12,7 @@ CREATE TABLE employees (
     last_name         Text  NOT NULL,
     email             Text  NOT NULL,
     hire_date         Date32 NOT NULL,
-    salary            Double NOT NULL,
+    salary            Decimal(12,2) NOT NULL,
     department_id     Int32,
     is_active         Bool  NOT NULL,
     notes             Text,
@@ -25,7 +25,7 @@ CREATE TABLE employees (
 CREATE TABLE projects (
     id          Int32 NOT NULL,
     name        Text  NOT NULL,
-    budget      Double,
+    budget      Decimal(15,2),
     start_date  Date32 NOT NULL,
     end_date    Date32,
     description Text,

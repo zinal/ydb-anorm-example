@@ -15,6 +15,36 @@ import anorm.{Column, MetaDataItem, ToStatement, TypeDoesNotMatch}
   */
 object YdbColumnAdapters {
 
+  implicit val bigDecimalColumn: Column[BigDecimal] =
+    Column.nonNull[BigDecimal] { (value, meta) =>
+      val MetaDataItem(qualified, _, _) = meta
+      value match {
+        case bd: java.math.BigDecimal => Right(BigDecimal(bd))
+        case bd: BigDecimal           => Right(bd)
+        case n: java.lang.Number      => Right(BigDecimal(n.doubleValue()))
+        case _ =>
+          Left(TypeDoesNotMatch(
+            s"Cannot convert $value:${value.getClass} to BigDecimal for column $qualified"
+          ))
+      }
+    }
+
+  implicit val optBigDecimalColumn: Column[Option[BigDecimal]] =
+    Column { (value, meta) =>
+      val MetaDataItem(qualified, nullable, _) = meta
+      value match {
+        case null                     => Right(None)
+        case bd: java.math.BigDecimal => Right(Some(BigDecimal(bd)))
+        case bd: BigDecimal           => Right(Some(bd))
+        case n: java.lang.Number      => Right(Some(BigDecimal(n.doubleValue())))
+        case _ if nullable            => Right(None)
+        case _ =>
+          Left(TypeDoesNotMatch(
+            s"Cannot convert $value:${value.getClass} to Option[BigDecimal] for column $qualified"
+          ))
+      }
+    }
+
   implicit val localDateColumn: Column[LocalDate] =
     Column.nonNull[LocalDate] { (value, meta) =>
       val MetaDataItem(qualified, _, _) = meta

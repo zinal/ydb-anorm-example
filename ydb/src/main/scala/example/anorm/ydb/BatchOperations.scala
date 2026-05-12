@@ -3,6 +3,7 @@ package example.anorm.ydb
 import java.sql.Connection
 import anorm._
 import anorm.SqlParser._
+import YdbColumnAdapters._
 
 /** Demonstrates BatchSql for efficient multi-row DML against YDB:
   * batch inserts (upserts) and batch updates.
@@ -10,12 +11,12 @@ import anorm.SqlParser._
 object BatchOperations {
 
   def batchInsertDepartments(
-      departments: Seq[(Int, String, String, Double)]
+      departments: Seq[(Int, String, String, BigDecimal)]
   )(implicit c: Connection): Array[Int] = {
     require(departments.nonEmpty, "Need at least one department")
     val (firstId, firstName, firstLoc, firstBudget) = departments.head
     val batch = BatchSql(
-      "UPSERT INTO departments(id, name, location, budget) VALUES ({id}, {name}, {location}, {budget})",
+      "UPSERT INTO departments(id, name, location, budget) VALUES ({id}, {name}, {location}, CAST({budget} AS Decimal(15,2)))",
       Seq[NamedParameter]("id" -> firstId, "name" -> firstName, "location" -> firstLoc, "budget" -> firstBudget),
       departments.tail.map { case (id, name, loc, budget) =>
         Seq[NamedParameter]("id" -> id, "name" -> name, "location" -> loc, "budget" -> budget)
@@ -25,12 +26,12 @@ object BatchOperations {
   }
 
   def batchUpdateSalaries(
-      updates: Seq[(Int, Double)]
+      updates: Seq[(Int, BigDecimal)]
   )(implicit c: Connection): Array[Int] = {
     require(updates.nonEmpty, "Need at least one update")
     val (firstId, firstSalary) = updates.head
     val batch = BatchSql(
-      "UPDATE employees SET salary = {salary} WHERE id = {id}",
+      "UPDATE employees SET salary = CAST({salary} AS Decimal(12,2)) WHERE id = {id}",
       Seq[NamedParameter]("id" -> firstId, "salary" -> firstSalary),
       updates.tail.map { case (id, salary) =>
         Seq[NamedParameter]("id" -> id, "salary" -> salary)
@@ -57,7 +58,7 @@ object BatchOperations {
   def countDepartments()(implicit c: Connection): Long =
     SQL"SELECT count(*) FROM departments".as(scalar[Long].single)
 
-  def getSalary(employeeId: Int)(implicit c: Connection): Double =
+  def getSalary(employeeId: Int)(implicit c: Connection): BigDecimal =
     SQL"SELECT salary FROM employees WHERE id = $employeeId"
-      .as(get[Double]("salary").single)
+      .as(get[BigDecimal]("salary").single)
 }

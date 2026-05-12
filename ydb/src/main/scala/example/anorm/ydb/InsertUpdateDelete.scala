@@ -12,13 +12,18 @@ import YdbColumnAdapters._
   *
   * YDB has no auto-increment / SERIAL columns, so callers supply IDs
   * explicitly — a common pattern in distributed databases.
+  *
+  * Note: YDB requires explicit CAST for Decimal parameters because the JDBC
+  * driver declares them as Decimal(22,9) by default, which doesn't implicitly
+  * convert to the column's Decimal(p,s).
   */
 object InsertUpdateDelete {
 
-  def insertDepartment(id: Int, name: String, location: String, budget: Double)(
+  def insertDepartment(id: Int, name: String, location: String, budget: BigDecimal)(
       implicit c: Connection
   ): Int =
-    SQL"UPSERT INTO departments(id, name, location, budget) VALUES ($id, $name, $location, $budget)"
+    SQL("UPSERT INTO departments(id, name, location, budget) VALUES ({id}, {name}, {loc}, CAST({budget} AS Decimal(15,2)))")
+      .on("id" -> id, "name" -> name, "loc" -> location, "budget" -> budget)
       .executeUpdate()
 
   def insertEmployee(
@@ -27,7 +32,7 @@ object InsertUpdateDelete {
       lastName: String,
       email: String,
       hireDate: LocalDate,
-      salary: Double,
+      salary: BigDecimal,
       departmentId: Int,
       createdAt: LocalDateTime,
       rating: Option[Double] = None,
@@ -35,7 +40,7 @@ object InsertUpdateDelete {
   )(implicit c: Connection): Int =
     SQL(
       """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at, rating, bonus_multiplier)
-         VALUES ({id}, {fn}, {ln}, {email}, {hd}, {sal}, {did}, true, {cat}, {rat}, {bm})"""
+         VALUES ({id}, {fn}, {ln}, {email}, {hd}, CAST({sal} AS Decimal(12,2)), {did}, true, {cat}, {rat}, {bm})"""
     ).on(
         "id"    -> id,
         "fn"    -> firstName,
@@ -50,14 +55,16 @@ object InsertUpdateDelete {
       )
       .executeUpdate()
 
-  def insertProject(id: Int, name: String, budget: Double, startDate: LocalDate)(
+  def insertProject(id: Int, name: String, budget: BigDecimal, startDate: LocalDate)(
       implicit c: Connection
   ): Int =
-    SQL"UPSERT INTO projects(id, name, budget, start_date) VALUES ($id, $name, $budget, $startDate)"
+    SQL("UPSERT INTO projects(id, name, budget, start_date) VALUES ({id}, {name}, CAST({budget} AS Decimal(15,2)), {sd})")
+      .on("id" -> id, "name" -> name, "budget" -> budget, "sd" -> startDate)
       .executeUpdate()
 
-  def updateSalary(employeeId: Int, newSalary: Double)(implicit c: Connection): Int =
-    SQL"UPDATE employees SET salary = $newSalary WHERE id = $employeeId"
+  def updateSalary(employeeId: Int, newSalary: BigDecimal)(implicit c: Connection): Int =
+    SQL("UPDATE employees SET salary = CAST({sal} AS Decimal(12,2)) WHERE id = {id}")
+      .on("sal" -> newSalary, "id" -> employeeId)
       .executeUpdate()
 
   def deactivateEmployee(employeeId: Int, note: String)(implicit c: Connection): Int =
@@ -71,9 +78,10 @@ object InsertUpdateDelete {
   /** YDB-native upsert: inserts a new row or replaces the existing one
     * with the same primary key — always idempotent.
     */
-  def upsertDepartment(id: Int, name: String, location: String, budget: Double)(
+  def upsertDepartment(id: Int, name: String, location: String, budget: BigDecimal)(
       implicit c: Connection
   ): Int =
-    SQL"UPSERT INTO departments(id, name, location, budget) VALUES ($id, $name, $location, $budget)"
+    SQL("UPSERT INTO departments(id, name, location, budget) VALUES ({id}, {name}, {loc}, CAST({budget} AS Decimal(15,2)))")
+      .on("id" -> id, "name" -> name, "loc" -> location, "budget" -> budget)
       .executeUpdate()
 }

@@ -173,7 +173,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       val result = BasicQueries.findDepartmentWithMaxBudget()
       assert(result.isDefined)
       assert(result.get._1 === "Engineering")
-      assert(result.get._2 === 500000.0)
+      assert(result.get._2 === BigDecimal("500000.00"))
     }
   }
 
@@ -187,7 +187,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("BasicQueries - getScalarBudgetSum") {
     withConnection { implicit c =>
-      assert(BasicQueries.getScalarBudgetSum() === 1200000.0)
+      assert(BasicQueries.getScalarBudgetSum() === BigDecimal("1200000.00"))
     }
   }
 
@@ -199,7 +199,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     withConnection { implicit c =>
       val depts = RowParsers.getAllDepartments()
       assert(depts.length === 4)
-      assert(depts.head === Department(1, "Engineering", Some("Building A"), 500000.0))
+      assert(depts.head === Department(1, "Engineering", Some("Building A"), BigDecimal("500000.00")))
     }
   }
 
@@ -209,7 +209,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       assert(alice.isDefined)
       assert(alice.get.firstName === "Alice")
       assert(alice.get.lastName === "Smith")
-      assert(alice.get.salary === 95000.0)
+      assert(alice.get.salary === BigDecimal("95000.00"))
       assert(alice.get.isActive === true)
       assert(alice.get.hireDate === java.time.LocalDate.of(2020, 1, 15))
       assert(alice.get.createdAt === LocalDateTime.of(2020, 1, 15, 9, 0, 0))
@@ -225,7 +225,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       val list = RowParsers.getNamesAndSalaries()
       assert(list.length === 6)
       assert(list.head._1 === "Dave")
-      assert(list.head._2 === 115000.0)
+      assert(list.head._2 === BigDecimal("115000.00"))
     }
   }
 
@@ -264,7 +264,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("ParameterBinding - findBySalaryRange") {
     withConnection { implicit c =>
-      val names = ParameterBinding.findBySalaryRange(80000.0, 100000.0)
+      val names = ParameterBinding.findBySalaryRange(BigDecimal(80000), BigDecimal(100000))
       assert(names === List("Frank", "Alice"))
     }
   }
@@ -347,7 +347,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("InsertUpdateDelete - insertDepartment") {
     withConnection { implicit c =>
-      InsertUpdateDelete.insertDepartment(10, "R&D", "Building D", 200000.0)
+      InsertUpdateDelete.insertDepartment(10, "R&D", "Building D", BigDecimal(200000))
       assert(BasicQueries.countDepartments() === 5L)
       assert(BasicQueries.findDepartmentNameById(10) === Some("R&D"))
     }
@@ -359,7 +359,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       val createdAt = LocalDateTime.of(2024, 1, 1, 12, 0, 0)
       InsertUpdateDelete.insertEmployee(
         10, "Grace", "Hopper", "grace@example.com",
-        hireDate, 120000.0, 1, createdAt
+        hireDate, BigDecimal(120000), 1, createdAt
       )
       val emp = RowParsers.getEmployeeById(10)
       assert(emp.isDefined)
@@ -372,7 +372,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   test("InsertUpdateDelete - insertProject") {
     withConnection { implicit c =>
       InsertUpdateDelete.insertProject(
-        10, "Project Delta", 30000.0, java.time.LocalDate.of(2024, 6, 1)
+        10, "Project Delta", BigDecimal(30000), java.time.LocalDate.of(2024, 6, 1)
       )
       assert(BasicQueries.countDepartments() === 4L) // unchanged
     }
@@ -380,10 +380,10 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("InsertUpdateDelete - updateSalary") {
     withConnection { implicit c =>
-      val affected = InsertUpdateDelete.updateSalary(1, 100000.0)
+      val affected = InsertUpdateDelete.updateSalary(1, BigDecimal(100000))
       assert(affected === 1)
       val emp = RowParsers.getEmployeeById(1)
-      assert(emp.get.salary === 100000.0)
+      assert(emp.get.salary === BigDecimal("100000.00"))
     }
   }
 
@@ -418,14 +418,14 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("InsertUpdateDelete - upsertDepartment (YDB UPSERT)") {
     withConnection { implicit c =>
-      InsertUpdateDelete.upsertDepartment(10, "Legal", "Building E", 100000.0)
+      InsertUpdateDelete.upsertDepartment(10, "Legal", "Building E", BigDecimal(100000))
       assert(BasicQueries.findDepartmentNameById(10) === Some("Legal"))
 
       // upsert existing row — replaces all columns
-      InsertUpdateDelete.upsertDepartment(1, "Engineering", "Building Z", 999999.0)
+      InsertUpdateDelete.upsertDepartment(1, "Engineering", "Building Z", BigDecimal(999999))
       val result = BasicQueries.findDepartmentWithMaxBudget()
       assert(result.get._1 === "Engineering")
-      assert(result.get._2 === 999999.0)
+      assert(result.get._2 === BigDecimal("999999.00"))
     }
   }
 
@@ -435,13 +435,13 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("StreamingResults - totalSalary (fold)") {
     withConnection { implicit c =>
-      assert(StreamingResults.totalSalary() === 546000.0)
+      assert(StreamingResults.totalSalary() === BigDecimal(546000))
     }
   }
 
   test("StreamingResults - employeesUntilBudget (foldWhile)") {
     withConnection { implicit c =>
-      val names = StreamingResults.employeesUntilBudget(150000.0)
+      val names = StreamingResults.employeesUntilBudget(BigDecimal(150000))
       assert(names === List("Eve", "Carol"))
     }
   }
@@ -503,10 +503,10 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     withConnection { implicit c =>
       val before1 = Transactions.getDepartmentBudget(1)
       val before2 = Transactions.getDepartmentBudget(2)
-      val ok = Transactions.transferBudget(1, 2, 50000.0)
+      val ok = Transactions.transferBudget(1, 2, BigDecimal(50000))
       assert(ok === true)
-      assert(Transactions.getDepartmentBudget(1) === before1 - 50000.0)
-      assert(Transactions.getDepartmentBudget(2) === before2 + 50000.0)
+      assert(Transactions.getDepartmentBudget(1) === before1 - BigDecimal(50000))
+      assert(Transactions.getDepartmentBudget(2) === before2 + BigDecimal(50000))
     }
   }
 
@@ -514,7 +514,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     withConnection { implicit c =>
       val result = Transactions.hireWithBudgetCheck(
         10, "Grace", "Hopper", "grace@example.com",
-        80000.0, 2, 500000.0
+        BigDecimal(80000), 2, BigDecimal(500000)
       )
       assert(result.isRight)
       assert(result.right.get === 10)
@@ -525,7 +525,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     withConnection { implicit c =>
       val result = Transactions.hireWithBudgetCheck(
         11, "Reject", "Person", "reject@example.com",
-        900000.0, 2, 100000.0
+        BigDecimal(900000), 2, BigDecimal(100000)
       )
       assert(result.isLeft)
       assert(result.left.getOrElse("").contains("exceed budget"))
@@ -536,7 +536,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     implicit val cfg: RetryConfig = RetryConfig(maxRetries = 3, initialBackoffMs = 1)
     val ok = YdbRetry.retry(idempotent = true) {
       withConnection { implicit c =>
-        Transactions.transferBudget(1, 2, 10000.0)
+        Transactions.transferBudget(1, 2, BigDecimal(10000))
       }
     }
     assert(ok === true)
@@ -549,9 +549,9 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   test("BatchOperations - batchInsertDepartments") {
     withConnection { implicit c =>
       val depts = Seq(
-        (10, "R&D",   "Building D", 180000.0),
-        (11, "Legal", "Building E", 120000.0),
-        (12, "Ops",   "Building F", 90000.0)
+        (10, "R&D",   "Building D", BigDecimal(180000)),
+        (11, "Legal", "Building E", BigDecimal(120000)),
+        (12, "Ops",   "Building F", BigDecimal(90000))
       )
       BatchOperations.batchInsertDepartments(depts)
       assert(BatchOperations.countDepartments() === 7L)
@@ -561,14 +561,14 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   test("BatchOperations - batchUpdateSalaries") {
     withConnection { implicit c =>
       val updates = Seq(
-        (1, 100000.0),
-        (2, 110000.0),
-        (3, 82000.0)
+        (1, BigDecimal(100000)),
+        (2, BigDecimal(110000)),
+        (3, BigDecimal(82000))
       )
       BatchOperations.batchUpdateSalaries(updates)
-      assert(BatchOperations.getSalary(1) === 100000.0)
-      assert(BatchOperations.getSalary(2) === 110000.0)
-      assert(BatchOperations.getSalary(3) === 82000.0)
+      assert(BatchOperations.getSalary(1) === BigDecimal("100000.00"))
+      assert(BatchOperations.getSalary(2) === BigDecimal("110000.00"))
+      assert(BatchOperations.getSalary(3) === BigDecimal("82000.00"))
     }
   }
 
@@ -638,7 +638,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       val createdAt = LocalDateTime.of(2024, 6, 15, 14, 30, 0)
       TimestampQueries.insertEmployeeWithTimestamp(
         10, "Grace", "Hopper", "grace@example.com",
-        java.time.LocalDate.of(2024, 6, 15), 120000.0, 1, createdAt
+        java.time.LocalDate.of(2024, 6, 15), BigDecimal(120000), 1, createdAt
       )
       val ts = TimestampQueries.getEmployeeCreatedAt(10)
       assert(ts === Some(createdAt))
@@ -779,7 +779,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       val createdAt = LocalDateTime.of(2024, 1, 1, 12, 0, 0)
       FloatingPointQueries.insertEmployeeWithDoubles(
         10, "Grace", "Hopper", "grace@example.com",
-        java.time.LocalDate.of(2024, 1, 1), 120000.0, 1,
+        java.time.LocalDate.of(2024, 1, 1), BigDecimal(120000), 1,
         createdAt, Some(4.7), 1.20
       )
       val emp = RowParsers.getEmployeeById(10)
@@ -794,13 +794,108 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       val createdAt = LocalDateTime.of(2024, 2, 1, 12, 0, 0)
       FloatingPointQueries.insertEmployeeWithDoubles(
         11, "Null", "Rating", "null.rating@example.com",
-        java.time.LocalDate.of(2024, 2, 1), 80000.0, 2,
+        java.time.LocalDate.of(2024, 2, 1), BigDecimal(80000), 2,
         createdAt, None, 1.0
       )
       val emp = RowParsers.getEmployeeById(11)
       assert(emp.isDefined)
       assert(emp.get.rating === None)
       assert(emp.get.bonusMultiplier === 1.0)
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // DecimalQueries
+  // ---------------------------------------------------------------------------
+
+  test("DecimalQueries - getDepartmentBudget (read Decimal)") {
+    withConnection { implicit c =>
+      assert(DecimalQueries.getDepartmentBudget(1) === Some(BigDecimal("500000.00")))
+      assert(DecimalQueries.getDepartmentBudget(2) === Some(BigDecimal("300000.00")))
+      assert(DecimalQueries.getDepartmentBudget(999) === None)
+    }
+  }
+
+  test("DecimalQueries - getEmployeeSalary (read Decimal)") {
+    withConnection { implicit c =>
+      assert(DecimalQueries.getEmployeeSalary(1) === Some(BigDecimal("95000.00")))
+      assert(DecimalQueries.getEmployeeSalary(4) === Some(BigDecimal("115000.00")))
+    }
+  }
+
+  test("DecimalQueries - write and re-read Decimal preserves precision") {
+    withConnection { implicit c =>
+      val salary = BigDecimal("123456.78")
+      val readBack = DecimalQueries.insertAndReadBackSalary(
+        20, "Test", "Decimal", "test.decimal@example.com", salary, 1
+      )
+      assert(readBack === salary)
+    }
+  }
+
+  test("DecimalQueries - write and re-read Decimal with trailing zeros") {
+    withConnection { implicit c =>
+      val salary = BigDecimal("99000.10")
+      val readBack = DecimalQueries.insertAndReadBackSalary(
+        21, "Trail", "Zeros", "trail.zeros@example.com", salary, 1
+      )
+      assert(readBack.scale >= 1)
+      assert(readBack === salary)
+    }
+  }
+
+  test("DecimalQueries - updateDepartmentBudget and re-read") {
+    withConnection { implicit c =>
+      val newBudget = BigDecimal("777777.77")
+      DecimalQueries.updateDepartmentBudget(1, newBudget)
+      assert(DecimalQueries.getDepartmentBudget(1) === Some(newBudget))
+    }
+  }
+
+  test("DecimalQueries - findDepartmentsByBudgetRange (filter Decimal)") {
+    withConnection { implicit c =>
+      val result = DecimalQueries.findDepartmentsByBudgetRange(
+        BigDecimal("200000"), BigDecimal("400000")
+      )
+      assert(result.map(_._1) === List("Sales", "Marketing"))
+      assert(result.head._2 === BigDecimal("250000.00"))
+      assert(result.last._2 === BigDecimal("300000.00"))
+    }
+  }
+
+  test("DecimalQueries - findEmployeesBySalaryAbove (filter Decimal)") {
+    withConnection { implicit c =>
+      val result = DecimalQueries.findEmployeesBySalaryAbove(BigDecimal("100000"))
+      assert(result.map(_._1) === List("Bob", "Dave"))
+      assert(result.head._2 === BigDecimal("105000.00"))
+      assert(result.last._2 === BigDecimal("115000.00"))
+    }
+  }
+
+  test("DecimalQueries - sumDepartmentBudgets (aggregate Decimal)") {
+    withConnection { implicit c =>
+      val total = DecimalQueries.sumDepartmentBudgets()
+      assert(total === BigDecimal("1200000.00"))
+    }
+  }
+
+  test("DecimalQueries - avgEmployeeSalary (aggregate Decimal)") {
+    withConnection { implicit c =>
+      val avg = DecimalQueries.avgEmployeeSalary()
+      assert(avg.isDefined)
+      assert((avg.get - BigDecimal(91000)).abs < BigDecimal(1))
+    }
+  }
+
+  test("DecimalQueries - maxDepartmentBudget") {
+    withConnection { implicit c =>
+      assert(DecimalQueries.maxDepartmentBudget() === Some(BigDecimal("500000.00")))
+    }
+  }
+
+  test("DecimalQueries - minEmployeeSalary") {
+    withConnection { implicit c =>
+      assert(DecimalQueries.minEmployeeSalary() === Some(BigDecimal("65000.00")))
     }
   }
 }

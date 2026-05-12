@@ -16,7 +16,7 @@ object RowParsers {
     get[Int]("id") ~
       get[String]("name") ~
       get[Option[String]]("location") ~
-      get[Double]("budget") map {
+      get[BigDecimal]("budget") map {
         case id ~ name ~ location ~ budget =>
           Department(id, name, location, budget)
       }
@@ -27,7 +27,7 @@ object RowParsers {
       str("last_name") ~
       str("email") ~
       get[LocalDate]("hire_date") ~
-      get[Double]("salary") ~
+      get[BigDecimal]("salary") ~
       get[Option[Int]]("department_id") ~
       bool("is_active") ~
       get[Option[String]]("notes") ~
@@ -38,8 +38,8 @@ object RowParsers {
           Employee(id, fn, ln, email, hd, sal, did, active, notes, cat, rat, bm)
       }
 
-  val nameAndSalaryParser: RowParser[(String, Double)] =
-    (str("first_name") ~ get[Double]("salary")).map(SqlParser.flatten)
+  val nameAndSalaryParser: RowParser[(String, BigDecimal)] =
+    (str("first_name") ~ get[BigDecimal]("salary")).map(SqlParser.flatten)
 
   case class EmployeeWithDepartment(employee: Employee, departmentName: String)
 
@@ -62,7 +62,7 @@ object RowParsers {
           FROM employees WHERE id = $id"""
       .as(employeeParser.singleOpt)
 
-  def getNamesAndSalaries()(implicit c: Connection): List[(String, Double)] =
+  def getNamesAndSalaries()(implicit c: Connection): List[(String, BigDecimal)] =
     SQL"SELECT first_name, salary FROM employees ORDER BY salary DESC"
       .as(nameAndSalaryParser.*)
 

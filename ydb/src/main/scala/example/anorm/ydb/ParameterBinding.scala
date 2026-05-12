@@ -15,8 +15,8 @@ object ParameterBinding {
       .on("dept" -> deptName)
       .as(str("first_name").*)
 
-  def findBySalaryRange(minSalary: Double, maxSalary: Double)(implicit c: Connection): List[String] =
-    SQL("SELECT first_name FROM employees WHERE salary >= {min} AND salary <= {max} ORDER BY salary")
+  def findBySalaryRange(minSalary: BigDecimal, maxSalary: BigDecimal)(implicit c: Connection): List[String] =
+    SQL("SELECT first_name FROM employees WHERE salary >= CAST({min} AS Decimal(12,2)) AND salary <= CAST({max} AS Decimal(12,2)) ORDER BY salary")
       .on("min" -> minSalary, "max" -> maxSalary)
       .as(str("first_name").*)
 

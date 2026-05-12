@@ -2,6 +2,7 @@ package example.anorm.ydb
 
 import java.sql.Connection
 import anorm._
+import YdbColumnAdapters._
 
 /** Demonstrates streaming / iterative result processing against YDB:
   * fold for full aggregation, foldWhile for early termination, and
@@ -9,18 +10,18 @@ import anorm._
   */
 object StreamingResults {
 
-  def totalSalary()(implicit c: Connection): Double =
+  def totalSalary()(implicit c: Connection): BigDecimal =
     SQL"SELECT salary FROM employees"
-      .fold(0.0) { (acc, row) =>
-        acc + row[Double]("salary")
+      .fold(BigDecimal(0)) { (acc, row) =>
+        acc + row[BigDecimal]("salary")
       }
-      .fold(_ => 0.0, identity)
+      .fold(_ => BigDecimal(0), identity)
 
-  def employeesUntilBudget(budget: Double)(implicit c: Connection): List[String] =
+  def employeesUntilBudget(budget: BigDecimal)(implicit c: Connection): List[String] =
     SQL"SELECT first_name, salary FROM employees ORDER BY salary"
-      .foldWhile((List.empty[String], 0.0)) {
+      .foldWhile((List.empty[String], BigDecimal(0))) {
         case ((names, total), row) =>
-          val salary   = row[Double]("salary")
+          val salary   = row[BigDecimal]("salary")
           val newTotal = total + salary
           if (newTotal <= budget)
             ((row[String]("first_name") :: names, newTotal), true)
