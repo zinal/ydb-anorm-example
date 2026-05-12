@@ -1,7 +1,7 @@
 package example.anorm.ydb
 
 import java.sql.Connection
-import java.time.LocalDate
+import java.time.{LocalDate, LocalDateTime}
 import anorm._
 import anorm.SqlParser._
 import YdbColumnAdapters._
@@ -30,9 +30,10 @@ object RowParsers {
       get[Double]("salary") ~
       get[Option[Int]]("department_id") ~
       bool("is_active") ~
-      get[Option[String]]("notes") map {
-        case id ~ fn ~ ln ~ email ~ hd ~ sal ~ did ~ active ~ notes =>
-          Employee(id, fn, ln, email, hd, sal, did, active, notes)
+      get[Option[String]]("notes") ~
+      get[LocalDateTime]("created_at") map {
+        case id ~ fn ~ ln ~ email ~ hd ~ sal ~ did ~ active ~ notes ~ cat =>
+          Employee(id, fn, ln, email, hd, sal, did, active, notes, cat)
       }
 
   val nameAndSalaryParser: RowParser[(String, Double)] =
@@ -54,7 +55,7 @@ object RowParsers {
 
   def getEmployeeById(id: Int)(implicit c: Connection): Option[Employee] =
     SQL"""SELECT id, first_name, last_name, email, hire_date, salary,
-                 department_id, is_active, notes
+                 department_id, is_active, notes, created_at
           FROM employees WHERE id = $id"""
       .as(employeeParser.singleOpt)
 
@@ -65,7 +66,7 @@ object RowParsers {
   def getEmployeeWithDepartment(empId: Int)(implicit c: Connection): Option[EmployeeWithDepartment] =
     SQL"""SELECT e.id, e.first_name, e.last_name, e.email, e.hire_date,
                  e.salary, e.department_id, e.is_active, e.notes,
-                 d.name AS dept_name
+                 e.created_at, d.name AS dept_name
           FROM employees e
           JOIN departments d ON e.department_id = d.id
           WHERE e.id = $empId"""

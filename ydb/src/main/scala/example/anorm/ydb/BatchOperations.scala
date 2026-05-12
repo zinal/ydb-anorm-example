@@ -45,7 +45,7 @@ object BatchOperations {
     require(assignments.nonEmpty, "Need at least one assignment")
     val (firstEmp, firstProj, firstRole) = assignments.head
     val batch = BatchSql(
-      "UPSERT INTO employee_projects(employee_id, project_id, role, assigned_date) VALUES ({eid}, {pid}, {role}, CurrentUtcDate())",
+      "UPSERT INTO employee_projects(employee_id, project_id, role, assigned_date) VALUES ({eid}, {pid}, {role}, CAST(CurrentUtcDate() AS Date32))",
       Seq[NamedParameter]("eid" -> firstEmp, "pid" -> firstProj, "role" -> firstRole),
       assignments.tail.map { case (eid, pid, role) =>
         Seq[NamedParameter]("eid" -> eid, "pid" -> pid, "role" -> role)

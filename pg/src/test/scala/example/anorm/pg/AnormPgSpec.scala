@@ -6,7 +6,7 @@ import org.scalatest.funsuite.AnyFunSuite
 import org.testcontainers.utility.DockerImageName
 
 import java.sql.{Connection, DriverManager}
-import java.time.LocalDate
+import java.time.{LocalDate, LocalDateTime}
 
 class AnormPgSpec extends AnyFunSuite with ForAllTestContainer with BeforeAndAfterEach {
 
@@ -481,6 +481,94 @@ class AnormPgSpec extends AnyFunSuite with ForAllTestContainer with BeforeAndAft
       import anorm.SqlParser._
       val count = SQL"SELECT count(*) FROM employee_projects".as(scalar[Long].single)
       assert(count === 9L) // 7 original + 2 new
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // TimestampQueries
+  // ---------------------------------------------------------------------------
+
+  test("TimestampQueries - getEmployeeCreatedAt") {
+    withConnection { implicit c =>
+      val ts = TimestampQueries.getEmployeeCreatedAt(1)
+      assert(ts.isDefined)
+      assert(ts.get === LocalDateTime.of(2020, 1, 15, 9, 0, 0))
+    }
+  }
+
+  test("TimestampQueries - getAllCreatedTimestamps") {
+    withConnection { implicit c =>
+      val all = TimestampQueries.getAllCreatedTimestamps()
+      assert(all.length === 6)
+      assert(all.head._1 === "Frank") // earliest: 2017-02-28
+      assert(all.last._1 === "Eve")   // latest: 2022-07-01
+    }
+  }
+
+  test("TimestampQueries - findEmployeesCreatedBetween") {
+    withConnection { implicit c =>
+      val from = LocalDateTime.of(2019, 1, 1, 0, 0, 0)
+      val to   = LocalDateTime.of(2021, 1, 1, 0, 0, 0)
+      val names = TimestampQueries.findEmployeesCreatedBetween(from, to)
+      assert(names === List("Alice", "Bob"))
+    }
+  }
+
+  test("TimestampQueries - findEmployeesCreatedAfter") {
+    withConnection { implicit c =>
+      val ts = LocalDateTime.of(2021, 1, 1, 0, 0, 0)
+      val names = TimestampQueries.findEmployeesCreatedAfter(ts)
+      assert(names === List("Carol", "Eve"))
+    }
+  }
+
+  test("TimestampQueries - findEmployeesCreatedBefore") {
+    withConnection { implicit c =>
+      val ts = LocalDateTime.of(2019, 1, 1, 0, 0, 0)
+      val names = TimestampQueries.findEmployeesCreatedBefore(ts)
+      assert(names.sorted === List("Dave", "Frank"))
+    }
+  }
+
+  test("TimestampQueries - insertEmployeeWithTimestamp") {
+    withConnection { implicit c =>
+      val createdAt = LocalDateTime.of(2024, 6, 15, 14, 30, 0)
+      val id = TimestampQueries.insertEmployeeWithTimestamp(
+        "Grace", "Hopper", "grace@example.com",
+        LocalDate.of(2024, 6, 15), BigDecimal(120000), 1, createdAt
+      )
+      assert(id.isDefined)
+      val ts = TimestampQueries.getEmployeeCreatedAt(id.get.toInt)
+      assert(ts === Some(createdAt))
+    }
+  }
+
+  test("TimestampQueries - countEmployeesCreatedOnDate") {
+    withConnection { implicit c =>
+      assert(TimestampQueries.countEmployeesCreatedOnDate(2020, 1, 15) === 1L)
+      assert(TimestampQueries.countEmployeesCreatedOnDate(2020, 1, 16) === 0L)
+    }
+  }
+
+  test("TimestampQueries - getLatestCreatedAt") {
+    withConnection { implicit c =>
+      val latest = TimestampQueries.getLatestCreatedAt()
+      assert(latest === Some(LocalDateTime.of(2022, 7, 1, 11, 45, 0)))
+    }
+  }
+
+  test("TimestampQueries - getEarliestCreatedAt") {
+    withConnection { implicit c =>
+      val earliest = TimestampQueries.getEarliestCreatedAt()
+      assert(earliest === Some(LocalDateTime.of(2017, 2, 28, 16, 30, 0)))
+    }
+  }
+
+  test("TimestampQueries - Employee model includes createdAt") {
+    withConnection { implicit c =>
+      val alice = RowParsers.getEmployeeById(1)
+      assert(alice.isDefined)
+      assert(alice.get.createdAt === LocalDateTime.of(2020, 1, 15, 9, 0, 0))
     }
   }
 }

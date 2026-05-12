@@ -4,13 +4,13 @@ INSERT INTO departments (name, location, budget) VALUES
     ('Sales',       'Building C', 250000.00),
     ('HR',          'Building A', 150000.00);
 
-INSERT INTO employees (first_name, last_name, email, hire_date, salary, department_id, is_active, notes) VALUES
-    ('Alice', 'Smith',    'alice.smith@example.com',    '2020-01-15', 95000.00,  1, true,  'Senior engineer'),
-    ('Bob',   'Johnson',  'bob.johnson@example.com',    '2019-06-01', 105000.00, 1, true,  NULL),
-    ('Carol', 'Williams', 'carol.williams@example.com', '2021-03-20', 78000.00,  2, true,  'Marketing lead'),
-    ('Dave',  'Brown',    'dave.brown@example.com',     '2018-11-10', 115000.00, 1, true,  'Tech lead'),
-    ('Eve',   'Davis',    'eve.davis@example.com',      '2022-07-01', 65000.00,  3, true,  NULL),
-    ('Frank', 'Miller',   'frank.miller@example.com',   '2017-02-28', 88000.00,  4, false, 'On leave');
+INSERT INTO employees (first_name, last_name, email, hire_date, salary, department_id, is_active, notes, created_at) VALUES
+    ('Alice', 'Smith',    'alice.smith@example.com',    '2020-01-15', 95000.00,  1, true,  'Senior engineer', '2020-01-15 09:00:00'),
+    ('Bob',   'Johnson',  'bob.johnson@example.com',    '2019-06-01', 105000.00, 1, true,  NULL,              '2019-06-01 10:30:00'),
+    ('Carol', 'Williams', 'carol.williams@example.com', '2021-03-20', 78000.00,  2, true,  'Marketing lead',  '2021-03-20 08:15:00'),
+    ('Dave',  'Brown',    'dave.brown@example.com',     '2018-11-10', 115000.00, 1, true,  'Tech lead',       '2018-11-10 14:00:00'),
+    ('Eve',   'Davis',    'eve.davis@example.com',      '2022-07-01', 65000.00,  3, true,  NULL,              '2022-07-01 11:45:00'),
+    ('Frank', 'Miller',   'frank.miller@example.com',   '2017-02-28', 88000.00,  4, false, 'On leave',        '2017-02-28 16:30:00');
 
 INSERT INTO projects (name, budget, start_date, end_date, description) VALUES
     ('Project Alpha', 100000.00, '2023-01-01', '2023-12-31', 'Main product redesign'),

@@ -55,8 +55,8 @@ object Transactions {
         c.rollback()
         Left(s"Would exceed budget: ${currentBudget + salary} > $maxBudget")
       } else {
-        SQL"""UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active)
-              VALUES ($id, $firstName, $lastName, $email, CurrentUtcDate(), $salary, $deptId, true)"""
+        SQL"""UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at)
+              VALUES ($id, $firstName, $lastName, $email, CAST(CurrentUtcDate() AS Date32), $salary, $deptId, true, CAST(CurrentUtcTimestamp() AS Timestamp64))"""
           .executeUpdate()
         SQL"UPDATE departments SET budget = budget + $salary WHERE id = $deptId"
           .executeUpdate()

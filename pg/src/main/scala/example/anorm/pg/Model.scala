@@ -1,6 +1,6 @@
 package example.anorm.pg
 
-import java.time.LocalDate
+import java.time.{LocalDate, LocalDateTime}
 
 case class Department(
     id: Int,
@@ -18,7 +18,8 @@ case class Employee(
     salary: BigDecimal,
     departmentId: Option[Int],
     isActive: Boolean,
-    notes: Option[String]
+    notes: Option[String],
+    createdAt: LocalDateTime
 )
 
 case class Project(

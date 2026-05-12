@@ -1,7 +1,7 @@
 package example.anorm.ydb
 
 import java.sql.Connection
-import java.time.LocalDate
+import java.time.{LocalDate, LocalDateTime}
 import anorm._
 import anorm.SqlParser._
 import YdbColumnAdapters._
@@ -28,11 +28,12 @@ object InsertUpdateDelete {
       email: String,
       hireDate: LocalDate,
       salary: Double,
-      departmentId: Int
+      departmentId: Int,
+      createdAt: LocalDateTime
   )(implicit c: Connection): Int =
     SQL(
-      """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active)
-         VALUES ({id}, {fn}, {ln}, {email}, {hd}, {sal}, {did}, true)"""
+      """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at)
+         VALUES ({id}, {fn}, {ln}, {email}, {hd}, {sal}, {did}, true, {cat})"""
     ).on(
         "id"    -> id,
         "fn"    -> firstName,
@@ -40,7 +41,8 @@ object InsertUpdateDelete {
         "email" -> email,
         "hd"    -> hireDate,
         "sal"   -> salary,
-        "did"   -> departmentId
+        "did"   -> departmentId,
+        "cat"   -> createdAt
       )
       .executeUpdate()
 
