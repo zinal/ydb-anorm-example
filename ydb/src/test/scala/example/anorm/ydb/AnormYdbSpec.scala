@@ -37,12 +37,17 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   private def jdbcUrl: String =
     s"jdbc:ydb:grpc://${ydbContainer.getHost}:$grpcPort/local?forceSignedDatetimes=true"
 
+  // To keep the internal pools open for the duration of the test suite
+  private var mainConnection: Connection = _
+
   override def beforeAll(): Unit = {
     super.beforeAll()
     ydbContainer.start()
+    mainConnection = openConnection()
   }
 
   override def afterAll(): Unit = {
+    try { mainConnection.close() } catch { case _: Exception => }
     ydbContainer.stop()
     super.afterAll()
   }
