@@ -65,10 +65,6 @@ object Transactions {
         c.commit()
         true
       }
-    } catch {
-      case _: Exception =>
-        c.rollback()
-        false
     } finally {
       c.setAutoCommit(auto)
     }
@@ -87,7 +83,7 @@ object Transactions {
       salary: BigDecimal,
       deptId: Int,
       maxBudget: BigDecimal
-  )(implicit c: Connection, operationId: UUID): Either[Exception, Int] = {
+  )(implicit c: Connection, operationId: UUID): Either[String, Int] = {
     val auto = c.getAutoCommit
     c.setAutoCommit(false)
     try {
@@ -101,7 +97,7 @@ object Transactions {
 
         if (currentBudget + salary > maxBudget) {
           c.rollback()
-          Left(new Exception(s"Would exceed budget: ${currentBudget + salary} > $maxBudget"))
+          Left(s"Would exceed budget: ${currentBudget + salary} > $maxBudget")
         } else {
           SQL(
             """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at, bonus_multiplier)
@@ -119,10 +115,6 @@ object Transactions {
           Right(id)
         }
       }
-    } catch {
-      case e: Exception =>
-        c.rollback()
-        Left(e)
     } finally {
       c.setAutoCommit(auto)
     }
