@@ -2,6 +2,7 @@ package example.anorm.ydb
 
 import java.sql.PreparedStatement
 import java.time.{Instant, LocalDate, LocalDateTime, ZoneOffset}
+import java.util.UUID
 import anorm.{Column, MetaDataItem, ToStatement, TypeDoesNotMatch}
 
 /** Bridges between the YDB JDBC driver's type representations and what
@@ -10,10 +11,34 @@ import anorm.{Column, MetaDataItem, ToStatement, TypeDoesNotMatch}
   * The YDB driver returns `java.time.LocalDate` directly for Date32 columns
   * and `java.time.LocalDateTime` for Timestamp64 columns (with
   * forceSignedDatetimes=true), while Anorm's built-in Column instances only
-  * accept java.sql types. These implicits fix both directions for LocalDate
-  * and LocalDateTime.
+  * accept java.sql types. These implicits fix both directions for LocalDate,
+  * LocalDateTime, and `java.util.UUID` for YDB `Uuid` columns.
   */
 object YdbColumnAdapters {
+
+  implicit val uuidColumn: Column[UUID] =
+    Column.nonNull[UUID] { (value, meta) =>
+      val MetaDataItem(qualified, _, _) = meta
+      value match {
+        case u: UUID    => Right(u)
+        case s: String  =>
+          try Right(UUID.fromString(s))
+          catch {
+            case _: IllegalArgumentException =>
+              Left(TypeDoesNotMatch(s"Cannot parse UUID string for column $qualified"))
+          }
+        case _ =>
+          Left(TypeDoesNotMatch(
+            s"Cannot convert $value:${value.getClass} to UUID for column $qualified"
+          ))
+      }
+    }
+
+  implicit val uuidToStatement: ToStatement[UUID] =
+    new ToStatement[UUID] {
+      def set(s: PreparedStatement, index: Int, v: UUID): Unit =
+        s.setObject(index, v)
+    }
 
   implicit val bigDecimalColumn: Column[BigDecimal] =
     Column.nonNull[BigDecimal] { (value, meta) =>

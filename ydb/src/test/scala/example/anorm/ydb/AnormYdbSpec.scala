@@ -8,6 +8,7 @@ import org.testcontainers.containers.wait.strategy.Wait
 import java.net.ServerSocket
 import java.sql.{Connection, DriverManager, SQLRecoverableException, SQLTransientException}
 import java.time.LocalDateTime
+import java.util.UUID
 
 /** Thin subclass that exposes the protected `addFixedExposedPort` method
   * needed by YDB (host and container ports must match for discovery).
@@ -75,6 +76,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     withConnection { conn =>
       tryDrop(conn, "employee_projects")
       tryDrop(conn, "projects")
+      tryDrop(conn, "operations")
       tryDrop(conn, "employees")
       tryDrop(conn, "departments")
       runSqlResource(conn, "schema.sql")
@@ -94,7 +96,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   test("YdbRetry - retries on SQLRecoverableException") {
     implicit val cfg: RetryConfig = RetryConfig(maxRetries = 5, initialBackoffMs = 1, maxBackoffMs = 10)
     var attempts = 0
-    val result = YdbRetry.retry(idempotent = false) {
+    val result = YdbRetry.retry() {
       attempts += 1
       if (attempts < 3) throw new SQLRecoverableException("simulated retryable")
       "ok"
@@ -107,7 +109,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     implicit val cfg: RetryConfig = RetryConfig(maxRetries = 5, initialBackoffMs = 1, maxBackoffMs = 10)
 
     var attempts1 = 0
-    val r1 = YdbRetry.retry(idempotent = true) {
+    val r1 = YdbRetry.retryIdempotent { implicit operationId =>
       attempts1 += 1
       if (attempts1 < 3) throw new SQLTransientException("simulated conditionally retryable")
       "ok"
@@ -117,7 +119,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
     var attempts2 = 0
     assertThrows[SQLTransientException] {
-      YdbRetry.retry(idempotent = false) {
+      YdbRetry.retry() {
         attempts2 += 1
         throw new SQLTransientException("not idempotent")
       }
@@ -501,6 +503,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("Transactions - transferBudget (commit)") {
     withConnection { implicit c =>
+      implicit val operationId: UUID = UUID.randomUUID()
       val before1 = Transactions.getDepartmentBudget(1)
       val before2 = Transactions.getDepartmentBudget(2)
       val ok = Transactions.transferBudget(1, 2, BigDecimal(50000))
@@ -510,8 +513,21 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     }
   }
 
+  test("Transactions - transferBudget skips work when operation id already applied") {
+    withConnection { implicit c =>
+      implicit val operationId: UUID = UUID.randomUUID()
+      val before1 = Transactions.getDepartmentBudget(1)
+      val before2 = Transactions.getDepartmentBudget(2)
+      assert(Transactions.transferBudget(1, 2, BigDecimal(1000)) === true)
+      assert(Transactions.transferBudget(1, 2, BigDecimal(1000)) === true)
+      assert(Transactions.getDepartmentBudget(1) === before1 - BigDecimal(1000))
+      assert(Transactions.getDepartmentBudget(2) === before2 + BigDecimal(1000))
+    }
+  }
+
   test("Transactions - hireWithBudgetCheck (approved)") {
     withConnection { implicit c =>
+      implicit val operationId: UUID = UUID.randomUUID()
       val result = Transactions.hireWithBudgetCheck(
         10, "Grace", "Hopper", "grace@example.com",
         BigDecimal(80000), 2, BigDecimal(500000)
@@ -523,23 +539,46 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   test("Transactions - hireWithBudgetCheck (rejected by budget)") {
     withConnection { implicit c =>
+      implicit val operationId: UUID = UUID.randomUUID()
       val result = Transactions.hireWithBudgetCheck(
         11, "Reject", "Person", "reject@example.com",
         BigDecimal(900000), 2, BigDecimal(100000)
       )
       assert(result.isLeft)
-      assert(result.left.getOrElse("").contains("exceed budget"))
+      assert(result.left.getOrElse("").toString.contains("exceed budget"))
+    }
+  }
+
+  test("Transactions - hireWithBudgetCheck skips work when operation id already applied") {
+    withConnection { implicit c =>
+      implicit val operationId: UUID = UUID.randomUUID()
+      val deptBefore = Transactions.getDepartmentBudget(2)
+      val r1 = Transactions.hireWithBudgetCheck(
+        10, "Grace", "Hopper", "grace@example.com",
+        BigDecimal(80000), 2, BigDecimal(500000)
+      )
+      assert(r1 === Right(10))
+      val r2 = Transactions.hireWithBudgetCheck(
+        10, "Grace", "Hopper", "grace@example.com",
+        BigDecimal(80000), 2, BigDecimal(500000)
+      )
+      assert(r2 === Right(10))
+      assert(Transactions.getDepartmentBudget(2) === deptBefore + BigDecimal(80000))
     }
   }
 
   test("Transactions - retry pattern with YdbRetry") {
     implicit val cfg: RetryConfig = RetryConfig(maxRetries = 3, initialBackoffMs = 1)
-    val ok = YdbRetry.retry(idempotent = true) {
+    var attempts = 0
+    val ok = YdbRetry.retryIdempotent { implicit operationId =>
       withConnection { implicit c =>
+        attempts += 1
+        if (attempts < 3) throw new SQLTransientException("simulated conditionally retryable")
         Transactions.transferBudget(1, 2, BigDecimal(10000))
       }
     }
     assert(ok === true)
+    assert(attempts === 3)
   }
 
   // ---------------------------------------------------------------------------

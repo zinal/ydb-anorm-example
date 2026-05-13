@@ -75,7 +75,7 @@ All Anorm feature modules from the PostgreSQL version are ported, plus two YDB-s
 
 | Module | What it demonstrates |
 |---|---|
-| **YdbRetry** | Configurable retry with exponential backoff + jitter for `YdbRetryableException` (always retry) and `YdbConditionallyRetryableException` (idempotent-only) |
+| **YdbRetry** | `retry` for by-name bodies; `retryIdempotent` issues one UUID per logical operation (use `{ implicit operationId => ... }` with `Transactions`); YDB aborts the transaction on statement failure |
 | **YdbColumnAdapters** | Custom `Column`/`ToStatement` adapters for `LocalDate`, `LocalDateTime`, and `BigDecimal`, bridging between YDB JDBC driver types (`java.time.Instant` for Timestamp64, `java.time.LocalDate` for Date32, `java.math.BigDecimal` for Decimal) and Anorm expectations |
 | **BasicQueries** | SQL string interpolation, scalar queries, `single`, `singleOpt`, list retrieval |
 | **RowParsers** | Custom `RowParser` construction, `~` combinator, `map`, `flatten`, joined and aggregate parsers |
@@ -84,7 +84,7 @@ All Anorm feature modules from the PostgreSQL version are ported, plus two YDB-s
 | **InsertUpdateDelete** | `UPSERT INTO`, `executeUpdate()`, explicit ID management, YDB-native upsert |
 | **StreamingResults** | `fold` for aggregation, `foldWhile` for early termination, `withResult` / `Cursor` for row-by-row traversal |
 | **AnormMacros** | `Macro.namedParser`, `ColumnNaming.SnakeCase`, `Macro.indexedParser`, aliased join projections |
-| **Transactions** | Manual commit/rollback, business-rule validation; retry pattern demonstrated in tests |
+| **Transactions** | `operations` table for idempotency (`operation_id` is `Uuid`); `transferBudget` / `hireWithBudgetCheck` take implicit `java.util.UUID` (with implicit `Connection`) for the idempotency key; YDB rolls back the transaction automatically on statement errors |
 | **BatchOperations** | `BatchSql` for batch upserts and updates |
 | **TimestampQueries** | Working with `Timestamp64` columns: fetching, inserting with explicit timestamps, range-based filtering, aggregate MIN/MAX |
 | **FloatingPointQueries** | Working with `Double` columns: nullable and non-null values, insert/select/update, range filtering, NULL handling, aggregates (AVG, SUM, MAX) |
@@ -108,8 +108,15 @@ implicit val cfg: RetryConfig = RetryConfig(
 )
 
 // Idempotent read — retries on both exception families
-YdbRetry.retry(idempotent = true) {
+YdbRetry.retryIdempotent { implicit operationId =>
   withConnection { implicit c => BasicQueries.countDepartments() }
+}
+
+// Idempotent transactional write — one java.util.UUID for all attempts
+YdbRetry.retryIdempotent { implicit operationId =>
+  withConnection { implicit c =>
+    Transactions.transferBudget(fromDeptId, toDeptId, amount)
+  }
 }
 
 // Non-idempotent write — only unconditionally retryable errors trigger a retry
@@ -132,11 +139,11 @@ sbt compile
 sbt test
 ```
 
-The test suite (`AnormYdbSpec`) starts a `ydbplatform/local-ydb` container following the [YDB Java SDK](https://github.com/ydb-platform/ydb-java-sdk/tree/master/tests) container initialization pattern (fixed port mapping, `Wait.forHealthcheck()`, hostname set to `localhost` for discovery), then runs 83 test cases covering all demo modules plus the retry utility.
+The test suite (`AnormYdbSpec`) starts a `ydbplatform/local-ydb` container following the [YDB Java SDK](https://github.com/ydb-platform/ydb-java-sdk/tree/master/tests) container initialization pattern (fixed port mapping, `Wait.forHealthcheck()`, hostname set to `localhost` for discovery), then runs 85 test cases covering all demo modules plus the retry utility.
 
 ### Schema
 
-Same four-table schema as the PostgreSQL version, adapted for YDB types (`Int32`, `Text`, `Decimal(p,s)`, `Double`, `Date32`, `Timestamp64`, `Bool`). The `forceSignedDatetimes=true` JDBC URL property is required for Date32/Timestamp64 support. Decimal parameters require explicit `CAST({param} AS Decimal(p,s))` in SQL because the YDB JDBC driver declares BigDecimal values as `Decimal(22,9)` by default. DDL is in `ydb/src/main/resources/schema.sql` and seed data in `ydb/src/main/resources/data.sql`.
+Core tables match the PostgreSQL example, plus an `operations` table (`operation_id` as `Uuid`, `operation_type`, `applied_at`) used as idempotency storage for transactional writes in `Transactions`. Types: `Int32`, `Text`, `Decimal(p,s)`, `Double`, `Date32`, `Timestamp64`, `Uuid`, `Bool`. The `forceSignedDatetimes=true` JDBC URL property is required for Date32/Timestamp64 support. Decimal parameters require explicit `CAST({param} AS Decimal(p,s))` in SQL because the YDB JDBC driver declares BigDecimal values as `Decimal(22,9)` by default. On YDB, a failing statement aborts the current transaction automatically; application code still calls `rollback()` on catch where needed for JDBC connection hygiene. DDL is in `ydb/src/main/resources/schema.sql` and seed data in `ydb/src/main/resources/data.sql`.
 
 ---
 
