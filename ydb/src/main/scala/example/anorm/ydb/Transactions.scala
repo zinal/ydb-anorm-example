@@ -24,9 +24,9 @@ object OperationType {
   */
 object Transactions {
 
-  private def operationAlreadyApplied(operationType: String)(implicit c: Connection, operationId: UUID): Boolean =
-    SQL("SELECT operation_id FROM operations WHERE operation_id = {id} AND operation_type = {typ}")
-      .on("id" -> operationId, "typ" -> operationType)
+  private def operationAlreadyApplied()(implicit c: Connection, operationId: UUID): Boolean =
+    SQL("SELECT operation_id FROM operations WHERE operation_id = {id}")
+      .on("id" -> operationId)
       .as(get[UUID]("operation_id").singleOpt)
       .isDefined
 
@@ -48,25 +48,17 @@ object Transactions {
       toDeptId: Int,
       amount: BigDecimal
   )(implicit c: Connection, operationId: UUID): Boolean = {
-    val auto = c.getAutoCommit
-    c.setAutoCommit(false)
-    try {
-      if (operationAlreadyApplied(OperationType.BudgetTransfer)) {
-        c.commit()
-        true
-      } else {
-        SQL("UPDATE departments SET budget = budget - CAST({amt} AS Decimal(15,2)) WHERE id = {id}")
-          .on("amt" -> amount, "id" -> fromDeptId)
-          .executeUpdate()
-        SQL("UPDATE departments SET budget = budget + CAST({amt} AS Decimal(15,2)) WHERE id = {id}")
-          .on("amt" -> amount, "id" -> toDeptId)
-          .executeUpdate()
-        recordOperation(OperationType.BudgetTransfer)
-        c.commit()
-        true
-      }
-    } finally {
-      c.setAutoCommit(auto)
+    if (operationAlreadyApplied()) {
+      true
+    } else {
+      SQL("UPDATE departments SET budget = budget - CAST({amt} AS Decimal(15,2)) WHERE id = {id}")
+        .on("amt" -> amount, "id" -> fromDeptId)
+        .executeUpdate()
+      SQL("UPDATE departments SET budget = budget + CAST({amt} AS Decimal(15,2)) WHERE id = {id}")
+        .on("amt" -> amount, "id" -> toDeptId)
+        .executeUpdate()
+      recordOperation(OperationType.BudgetTransfer)
+      true
     }
   }
 
@@ -84,39 +76,31 @@ object Transactions {
       deptId: Int,
       maxBudget: BigDecimal
   )(implicit c: Connection, operationId: UUID): Either[String, Int] = {
-    val auto = c.getAutoCommit
-    c.setAutoCommit(false)
-    try {
-      if (operationAlreadyApplied(OperationType.HireWithBudget)) {
-        c.commit()
-        Right(id)
-      } else {
-        val currentBudget =
-          SQL"SELECT budget FROM departments WHERE id = $deptId"
-            .as(get[BigDecimal]("budget").single)
+    if (operationAlreadyApplied()) {
+      Right(id)
+    } else {
+      val currentBudget =
+        SQL"SELECT budget FROM departments WHERE id = $deptId"
+          .as(get[BigDecimal]("budget").single)
 
-        if (currentBudget + salary > maxBudget) {
-          c.rollback()
-          Left(s"Would exceed budget: ${currentBudget + salary} > $maxBudget")
-        } else {
-          SQL(
-            """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at, bonus_multiplier)
-               VALUES ({id}, {fn}, {ln}, {email}, CAST(CurrentUtcDate() AS Date32), CAST({sal} AS Decimal(12,2)), {did}, true, CAST(CurrentUtcTimestamp() AS Timestamp64), 1.0)"""
-          ).on(
-              "id" -> id, "fn" -> firstName, "ln" -> lastName,
-              "email" -> email, "sal" -> salary, "did" -> deptId
-            )
-            .executeUpdate()
-          SQL("UPDATE departments SET budget = budget + CAST({sal} AS Decimal(15,2)) WHERE id = {did}")
-            .on("sal" -> salary, "did" -> deptId)
-            .executeUpdate()
-          recordOperation(OperationType.HireWithBudget)
-          c.commit()
-          Right(id)
-        }
+      if (currentBudget + salary > maxBudget) {
+        c.rollback()
+        Left(s"Would exceed budget: ${currentBudget + salary} > $maxBudget")
+      } else {
+        SQL(
+          """UPSERT INTO employees(id, first_name, last_name, email, hire_date, salary, department_id, is_active, created_at, bonus_multiplier)
+              VALUES ({id}, {fn}, {ln}, {email}, CAST(CurrentUtcDate() AS Date32), CAST({sal} AS Decimal(12,2)), {did}, true, CAST(CurrentUtcTimestamp() AS Timestamp64), 1.0)"""
+        ).on(
+            "id" -> id, "fn" -> firstName, "ln" -> lastName,
+            "email" -> email, "sal" -> salary, "did" -> deptId
+          )
+          .executeUpdate()
+        SQL("UPDATE departments SET budget = budget + CAST({sal} AS Decimal(15,2)) WHERE id = {did}")
+          .on("sal" -> salary, "did" -> deptId)
+          .executeUpdate()
+        recordOperation(OperationType.HireWithBudget)
+        Right(id)
       }
-    } finally {
-      c.setAutoCommit(auto)
     }
   }
 

@@ -52,7 +52,15 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
 
   private def withConnection[T](f: Connection => T): T = {
     val conn = openConnection()
-    try f(conn) finally conn.close()
+    try {
+      conn.setAutoCommit(false)
+      val result = f(conn)
+      conn.commit()
+      result
+    } finally {
+      try { conn.rollback() } catch { case _: Exception => }
+      try { conn.close() } catch { case _: Exception => }
+    }
   }
 
   private def execStatements(conn: Connection, sql: String): Unit = {
