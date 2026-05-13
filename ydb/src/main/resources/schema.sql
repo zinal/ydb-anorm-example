@@ -39,3 +39,10 @@ CREATE TABLE employee_projects (
     assigned_date   Date32 NOT NULL,
     PRIMARY KEY (employee_id, project_id)
 );
+
+CREATE TABLE operations (
+    operation_id   Uuid NOT NULL,
+    operation_type Text NOT NULL,
+    applied_at     Timestamp64 NOT NULL,
+    PRIMARY KEY (operation_id)
+);

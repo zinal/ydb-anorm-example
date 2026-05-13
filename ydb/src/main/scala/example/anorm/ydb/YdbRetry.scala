@@ -1,6 +1,7 @@
 package example.anorm.ydb
 
 import java.sql.{SQLRecoverableException, SQLTransientException}
+import java.util.UUID
 import scala.util.Random
 
 /** Global retry configuration for YDB operations.
@@ -38,13 +39,28 @@ object RetryConfig {
   *
   * The entire transactional block (including connection acquisition) should
   * be placed inside the retry closure so that a fresh connection/transaction
-  * is used on each attempt.
+  * is used on each attempt. For YDB, a failing statement aborts the
+  * transaction automatically; the closure should perform one logical unit of
+  * work (including an idempotency check against `operations` when using
+  * [[Transactions.transferBudget]] / [[Transactions.hireWithBudgetCheck]]).
+  *
+  * Use [[retry]] for a by-name body, and [[retryIdempotent]] when the body
+  * needs a single stable operation id across all retry attempts (always
+  * retries both recoverable and transient failures; [[retry]] alone does not
+  * retry [[SQLTransientException]]).
   *
   * ==Usage==
   * {{{
   * // idempotent read — retries on both exception families
-  * YdbRetry.retry(idempotent = true) {
+  * YdbRetry.retryIdempotent { implicit operationId =>
   *   withConnection { implicit c => BasicQueries.countDepartments() }
+  * }
+  *
+  * // idempotent transactional write — one UUID for the whole retry sequence
+  * YdbRetry.retryIdempotent { implicit operationId =>
+  *   withConnection { implicit c =>
+  *     Transactions.transferBudget(fromDeptId, toDeptId, amount)
+  *   }
   * }
   *
   * // non-idempotent write — only unconditionally retryable errors trigger a retry
@@ -54,23 +70,40 @@ object RetryConfig {
   *
   * // custom configuration
   * implicit val cfg: RetryConfig = RetryConfig(maxRetries = 3, initialBackoffMs = 50)
-  * YdbRetry.retry(idempotent = true) { ... }
+  * YdbRetry.retry() { ... }
   * }}}
   */
 object YdbRetry {
 
-  def retry[T](idempotent: Boolean = false)(op: => T)(implicit config: RetryConfig): T = {
-    var remaining  = config.maxRetries
-    var backoffMs  = config.initialBackoffMs
+  /** Retries a by-name body. */
+  def retry[T]()(op: => T)(implicit config: RetryConfig): T =
+    runRetry(false, op)
+
+  /** Retries `op(operationId)` where `operationId` is one [[java.util.UUID]]
+    * generated before the retry loop and reused on every attempt (for
+    * [[Transactions]] idempotency against YDB `Uuid` columns). Retries on both
+    * [[SQLRecoverableException]] and [[SQLTransientException]] (unlike
+    * [[retry]], which does not retry transient failures). Use `{ implicit operationId => ... }`
+    * so [[Transactions.transferBudget]] / [[Transactions.hireWithBudgetCheck]]
+    * receive it implicitly alongside [[java.sql.Connection]].
+    */
+  def retryIdempotent[T](op: java.util.UUID => T)(implicit config: RetryConfig): T = {
+    val operationId = UUID.randomUUID()
+    runRetry(idempotent = true, op(operationId))
+  }
+
+  private def runRetry[T](idempotent: Boolean, attempt: => T)(implicit config: RetryConfig): T = {
+    var remaining = config.maxRetries
+    var backoffMs = config.initialBackoffMs
     while (true) {
-      try return op
+      try return attempt
       catch {
-        case e: SQLRecoverableException if remaining > 0 =>
+        case _: SQLRecoverableException if remaining > 0 =>
           Thread.sleep(jitteredBackoff(backoffMs, config.jitterFraction))
           remaining -= 1
           backoffMs = nextBackoff(backoffMs, config)
 
-        case e: SQLTransientException if remaining > 0 && idempotent =>
+        case _: SQLTransientException if remaining > 0 && idempotent =>
           Thread.sleep(jitteredBackoff(backoffMs, config.jitterFraction))
           remaining -= 1
           backoffMs = nextBackoff(backoffMs, config)
