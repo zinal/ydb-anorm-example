@@ -31,13 +31,12 @@ object YdbColumnAdapters {
 
   implicit val optBigDecimalColumn: Column[Option[BigDecimal]] =
     Column { (value, meta) =>
-      val MetaDataItem(qualified, nullable, _) = meta
+      val MetaDataItem(qualified, _, _) = meta
       value match {
         case null                     => Right(None)
         case bd: java.math.BigDecimal => Right(Some(BigDecimal(bd)))
         case bd: BigDecimal           => Right(Some(bd))
         case n: java.lang.Number      => Right(Some(BigDecimal(n.doubleValue())))
-        case _ if nullable            => Right(None)
         case _ =>
           Left(TypeDoesNotMatch(
             s"Cannot convert $value:${value.getClass} to Option[BigDecimal] for column $qualified"
@@ -67,13 +66,12 @@ object YdbColumnAdapters {
 
   implicit val optLocalDateColumn: Column[Option[LocalDate]] =
     Column { (value, meta) =>
-      val MetaDataItem(qualified, nullable, _) = meta
+      val MetaDataItem(qualified, _, _) = meta
       value match {
         case null                   => Right(None)
         case ld: LocalDate          => Right(Some(ld))
         case d: java.sql.Date       => Right(Some(d.toLocalDate))
         case ts: java.sql.Timestamp => Right(Some(ts.toLocalDateTime.toLocalDate))
-        case _ if nullable          => Right(None)
         case _ =>
           Left(TypeDoesNotMatch(
             s"Cannot convert $value:${value.getClass} to Option[LocalDate] for column $qualified"
@@ -103,13 +101,12 @@ object YdbColumnAdapters {
 
   implicit val optLocalDateTimeColumn: Column[Option[LocalDateTime]] =
     Column { (value, meta) =>
-      val MetaDataItem(qualified, nullable, _) = meta
+      val MetaDataItem(qualified, _, _) = meta
       value match {
         case null                   => Right(None)
         case ldt: LocalDateTime     => Right(Some(ldt))
         case inst: Instant          => Right(Some(LocalDateTime.ofInstant(inst, ZoneOffset.UTC)))
         case ts: java.sql.Timestamp => Right(Some(ts.toLocalDateTime))
-        case _ if nullable          => Right(None)
         case _ =>
           Left(TypeDoesNotMatch(
             s"Cannot convert $value:${value.getClass} to Option[LocalDateTime] for column $qualified"
