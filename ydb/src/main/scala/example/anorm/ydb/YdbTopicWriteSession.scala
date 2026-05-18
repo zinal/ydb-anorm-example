@@ -22,7 +22,7 @@ import tech.ydb.topic.write.{Message, SyncWriter}
   *    because publishing reuses the underlying [[GrpcTransport]] from
   *    `connection.unwrap(classOf[GrpcTransport])`.
   *  - Inside each JDBC transaction (`setAutoCommit(false)` … `commit` / `rollback`), bind each
-  *    `send` to the driver’s current [[YdbTransaction]] from
+  *    `send` to the driver's current [[YdbTransaction]] from
   *    `connection.unwrap(classOf[YdbTransaction])`.
   *  - Close during application shutdown so the writer can stop cleanly.
   *
