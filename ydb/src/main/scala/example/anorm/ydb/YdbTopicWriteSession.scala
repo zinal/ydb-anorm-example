@@ -3,7 +3,7 @@ package example.anorm.ydb
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Executor, TimeUnit}
 
 import scala.util.Using
 
@@ -13,18 +13,23 @@ import tech.ydb.topic.TopicClient
 import tech.ydb.topic.settings.{SendSettings, WriterSettings}
 import tech.ydb.topic.write.{Message, SyncWriter}
 
-/** Pairs a [[TopicClient]] with a [[SyncWriter]] for a single [[topicPath]].
+/** One [[TopicClient]] + [[SyncWriter]] pair for a single JDBC transaction, aligned with the
+  * current
+  * [[https://github.com/zinal/ydb-snippets/tree/main/apps/jdbc-basic ydb-snippets/apps/jdbc-basic]]
+  * flow:
   *
-  * This mirrors the control flow in
-  * [[https://github.com/zinal/ydb-snippets/tree/main/apps/jdbc-basic ydb-snippets/apps/jdbc-basic]]:
+  *  - After `setAutoCommit(false)`, build [[TopicClient]] from
+  *    `connection.unwrap(classOf[GrpcTransport])` and pass an application-owned
+  *    [[java.util.concurrent.Executor Executor]] into
+  *    `TopicClient.newClient(transport).setCompressionExecutor(executor).build()`.
+  *  - Build [[WriterSettings]] with topic path and [[producerId]], then `createSyncWriter` and
+  *    `init()` (non-blocking init, as in the Java sample).
+  *  - Send with `SendSettings` bound to `connection.unwrap(classOf[YdbTransaction])`, then
+  *    `flush()` before more SQL, then `commit` / `rollback`.
+  *  - On exit, `shutdown` the writer, then `close` the topic client (see [[close]]).
   *
-  *  - Open once using a connection from the same JDBC URL / pool as your transactional work,
-  *    because publishing reuses the underlying [[GrpcTransport]] from
-  *    `connection.unwrap(classOf[GrpcTransport])`.
-  *  - Inside each JDBC transaction (`setAutoCommit(false)` … `commit` / `rollback`), bind each
-  *    `send` to the driver's current [[YdbTransaction]] from
-  *    `connection.unwrap(classOf[YdbTransaction])`.
-  *  - Close during application shutdown so the writer can stop cleanly.
+  * YDB currently expects a separate writer per transaction; keep the session lifetime within
+  * that transaction and use [[YdbTopicAnorm.withTopicInJdbcTransaction]] for a safe template.
   *
   * @param shutdownTimeoutSeconds upper bound passed to [[SyncWriter.shutdown]] in [[close]]
   */
@@ -32,15 +37,10 @@ final class YdbTopicWriteSession private (
     topicClient: TopicClient,
     writer: SyncWriter,
     val topicPath: String,
+    val producerId: String,
     shutdownTimeoutSeconds: Long
 ) extends AutoCloseable {
 
-  /** Enqueues `message` against the YDB transaction currently associated with `connection`.
-    *
-    * The JDBC basic sample calls [[flush]] immediately after each send before more SQL; use
-    * [[sendTransactionalAndFlush]] when you want that behaviour, or call [[flush]] yourself when
-    * batching multiple messages in one database transaction.
-    */
   def enqueueTransactional(message: Message)(implicit connection: Connection): Unit = {
     val tx = YdbTopicWriteSession.currentYdbTransaction(connection)
     writer.send(
@@ -81,26 +81,41 @@ final class YdbTopicWriteSession private (
 
 object YdbTopicWriteSession {
 
-  /** YDB transaction handle bound to the JDBC connection for the current unit of work. */
+  def defaultProducerId: String =
+    Option(System.getenv("YDB_PRODUCER")).map(_.trim).filter(_.nonEmpty).getOrElse("anorm-example-producer")
+
   def currentYdbTransaction(connection: Connection): YdbTransaction =
     connection.unwrap(classOf[YdbTransaction])
 
   def grpcTransport(connection: Connection): GrpcTransport =
     connection.unwrap(classOf[GrpcTransport])
 
-  /** Opens a sync writer; callers must [[close]] it or use [[resource]]. */
+  /** Opens a topic client and sync writer for the current JDBC transaction.
+    *
+    * @param compressionExecutor executor used for topic compression work (often a shared
+    *                            `ExecutorService` from your application runtime)
+    */
   def open(
       topicPath: String,
       connection: Connection,
+      compressionExecutor: Executor,
+      producerId: String = defaultProducerId,
       shutdownTimeoutSeconds: Long = 30L
   ): YdbTopicWriteSession = {
-    val transport      = grpcTransport(connection)
-    val writerSettings = WriterSettings.newBuilder().setTopicPath(topicPath).build()
-    val topicClient    = TopicClient.newClient(transport).build()
+    val transport = grpcTransport(connection)
+    val topicClient = TopicClient
+      .newClient(transport)
+      .setCompressionExecutor(compressionExecutor)
+      .build()
     try {
+      val writerSettings = WriterSettings
+        .newBuilder()
+        .setTopicPath(topicPath)
+        .setProducerId(producerId)
+        .build()
       val writer = topicClient.createSyncWriter(writerSettings)
-      writer.initAndWait()
-      new YdbTopicWriteSession(topicClient, writer, topicPath, shutdownTimeoutSeconds)
+      writer.init()
+      new YdbTopicWriteSession(topicClient, writer, topicPath, producerId, shutdownTimeoutSeconds)
     } catch {
       case ex: Exception =>
         try topicClient.close()
@@ -109,8 +124,14 @@ object YdbTopicWriteSession {
     }
   }
 
-  def resource[A](topicPath: String, connection: Connection, shutdownTimeoutSeconds: Long = 30L)(
-      use: YdbTopicWriteSession => A
-  ): A =
-    Using.resource(open(topicPath, connection, shutdownTimeoutSeconds))(use)
+  def resource[A](
+      topicPath: String,
+      connection: Connection,
+      compressionExecutor: Executor,
+      producerId: String = defaultProducerId,
+      shutdownTimeoutSeconds: Long = 30L
+  )(use: YdbTopicWriteSession => A): A =
+    Using.resource(
+      open(topicPath, connection, compressionExecutor, producerId, shutdownTimeoutSeconds)
+    )(use)
 }

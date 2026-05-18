@@ -46,3 +46,5 @@ CREATE TABLE operations (
     applied_at     Timestamp64 NOT NULL,
     PRIMARY KEY (operation_id)
 );
+
+CREATE TOPIC anorm_topic_demo(CONSUMER anorm_spec_consumer);

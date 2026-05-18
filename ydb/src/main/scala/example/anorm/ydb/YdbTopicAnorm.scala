@@ -1,37 +1,20 @@
 package example.anorm.ydb
 
 import java.sql.Connection
+import java.util.concurrent.Executor
 
 import scala.util.control.NonFatal
 
-/** Small utilities for combining Anorm (implicit [[Connection]]) with YDB topic writes.
+/** JDBC transaction helpers for Anorm alongside YDB topic writes.
   *
-  * Topic sessions are opened separately via [[YdbTopicWriteSession]] because their lifetime is
-  * usually wider than a single JDBC transaction, while each `send` must be scoped to the
-  * current YDB transaction handle carried by the connection.
+  * Topic clients and writers are created '''inside''' each transaction (see
+  * [[https://github.com/zinal/ydb-snippets/tree/main/apps/jdbc-basic ydb-snippets/apps/jdbc-basic]]),
+  * with a caller-supplied [[java.util.concurrent.Executor Executor]] passed into
+  * [[YdbTopicWriteSession.open]] for compression.
   */
 object YdbTopicAnorm {
 
-  /** Runs `f` with `autoCommit` cleared, commits on success, and restores the previous flag.
-    *
-    * This is a plain JDBC transaction boundary suitable for interleaving Anorm `SQL` calls with
-    * [[YdbTopicWriteSession]] sends on the same connection. Use `{ implicit c => ... }` so Anorm
-    * statements and topic helpers can share one implicit [[Connection]].
-    *
-    * Example (same pattern as `jdbc-basic`, with Anorm in the middle):
-    *
-    * {{{
-    * import anorm._
-    *
-    * YdbTopicWriteSession.resource("my_topic", conn) { session =>
-    *   YdbTopicAnorm.withLocalTransaction(conn) { implicit c =>
-    *     SQL"UPDATE departments SET budget = budget - 1 WHERE id = 1".executeUpdate()
-    *     session.sendTransactionalAndFlushUtf8("budget-changed:1")
-    *     SQL"UPDATE departments SET budget = budget + 1 WHERE id = 2".executeUpdate()
-    *   }
-    * }
-    * }}}
-    */
+  /** Runs `f` with `autoCommit` cleared, commits on success, and restores the previous flag. */
   def withLocalTransaction[A](connection: Connection)(f: Connection => A): A = {
     val previousAutoCommit = connection.getAutoCommit
     connection.setAutoCommit(false)
@@ -47,6 +30,48 @@ object YdbTopicAnorm {
     } finally {
       try connection.setAutoCommit(previousAutoCommit)
       catch { case _: Throwable => () }
+    }
+  }
+
+  /** Starts a JDBC transaction, opens a per-transaction [[YdbTopicWriteSession]], runs `body`,
+    * commits on success, then closes the topic session (writer shutdown, client close).
+    *
+    * Use `{ case (conn, topic) => implicit val c = conn; ... }` so Anorm and
+    * `topic.sendTransactionalAndFlushUtf8(...)(c)` share one [[Connection]].
+    */
+  def withTopicInJdbcTransaction[A](
+      connection: Connection,
+      compressionExecutor: Executor,
+      topicPath: String,
+      producerId: String = YdbTopicWriteSession.defaultProducerId,
+      writerShutdownSeconds: Long = 30L
+  )(body: (Connection, YdbTopicWriteSession) => A): A = {
+    val previousAutoCommit = connection.getAutoCommit
+    connection.setAutoCommit(false)
+    var session: YdbTopicWriteSession = null
+    try {
+      session = YdbTopicWriteSession.open(
+        topicPath,
+        connection,
+        compressionExecutor,
+        producerId,
+        writerShutdownSeconds
+      )
+      val result = body(connection, session)
+      connection.commit()
+      result
+    } catch {
+      case NonFatal(t) =>
+        try connection.rollback()
+        catch { case _: Throwable => () }
+        throw t
+    } finally {
+      if (session != null) {
+        try session.close()
+        catch { case _: Exception => () }
+      }
+      try connection.setAutoCommit(previousAutoCommit)
+      catch { case _: Exception => () }
     }
   }
 }
