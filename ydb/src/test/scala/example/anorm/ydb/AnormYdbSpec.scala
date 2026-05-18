@@ -9,6 +9,10 @@ import java.net.ServerSocket
 import java.sql.{Connection, DriverManager, SQLRecoverableException, SQLTransientException}
 import java.time.LocalDateTime
 import java.util.UUID
+import java.util.concurrent.{Executors, TimeUnit}
+
+import anorm._
+import anorm.SqlParser.str
 
 /** Thin subclass that exposes the protected `addFixedExposedPort` method
   * needed by YDB (host and container ports must match for discovery).
@@ -84,9 +88,15 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     try { val s = conn.createStatement(); try s.execute(s"DROP TABLE $table") finally s.close() }
     catch { case _: Exception => }
 
+  private def tryDropTopic(conn: Connection, topic: String): Unit =
+    try { val s = conn.createStatement(); try s.execute(s"DROP TOPIC $topic") finally s.close() }
+    catch { case _: Exception => }
+
   override def beforeEach(): Unit = {
     super.beforeEach()
     withConnection { conn =>
+      tryDropTopic(conn, TransactionalTopicSample.TopicName)
+      tryDropTopic(conn, TransactionalTopicSample.SecondaryTopicName)
       tryDrop(conn, "employee_projects")
       tryDrop(conn, "projects")
       tryDrop(conn, "operations")
@@ -948,6 +958,35 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   test("DecimalQueries - minEmployeeSalary") {
     withConnection { implicit c =>
       assert(DecimalQueries.minEmployeeSalary() === Some(BigDecimal("65000.00")))
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // YDB topic + JDBC transaction (TransactionalTopicSample)
+  // ---------------------------------------------------------------------------
+
+  test("TransactionalTopicSample - multi-topic per JDBC txn (implicit publish context)") {
+    val pool = Executors.newCachedThreadPool()
+    try {
+      val conn = openConnection()
+      try {
+        val marker = s"topic-demo-${UUID.randomUUID()}"
+        implicit val ydbTopicPublish: YdbTopicPublishContext =
+          YdbTopicPublishContext(pool, TransactionalTopicSample.ProducerId)
+        val name =
+          TransactionalTopicSample.runDemoTransaction(conn, departmentId = 1, locationMarker = marker)
+        assert(name === "Engineering")
+        withConnection { implicit c =>
+          val loc =
+            SQL"SELECT location FROM departments WHERE id = 1"
+              .as(str("location").singleOpt)
+          assert(loc === Some(marker))
+        }
+      } finally conn.close()
+    } finally {
+      pool.shutdown()
+      try pool.awaitTermination(5L, TimeUnit.SECONDS)
+      catch { case _: InterruptedException => Thread.currentThread().interrupt() }
     }
   }
 }
