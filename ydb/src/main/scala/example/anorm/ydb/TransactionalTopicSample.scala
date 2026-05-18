@@ -7,6 +7,8 @@ import anorm.SqlParser.str
 
 /** Example transaction: Anorm read, publish to two topics on the same YDB transaction, then update.
   *
+  * Publishing uses [[YdbTransactionalTopics.sendMessage]] (UTF-8 `String` segments via [[SendSegment]] implicits).
+  *
   * Requires topics `[[TopicName]]` and `[[SecondaryTopicName]]` (see `schema.sql`).
   *
   * Supply `implicit val ... : YdbTopicPublishContext = YdbTopicPublishContext(executor, ProducerId)`
@@ -31,8 +33,8 @@ object TransactionalTopicSample {
       val name =
         SQL"SELECT name FROM departments WHERE id = $departmentId"
           .as(str("name").single)
-      topics.sendTransactionalAndFlushUtf8(TopicName, s"primary:department:$departmentId:$name\n")
-      topics.sendTransactionalAndFlushUtf8(SecondaryTopicName, s"secondary:dept:$departmentId\n")
+      topics.sendMessage(TopicName, s"primary:department:$departmentId:$name\n")
+      topics.sendMessage(SecondaryTopicName, s"secondary:dept:$departmentId\n")
       SQL("UPDATE departments SET location = {loc} WHERE id = {id}")
         .on("loc" -> locationMarker, "id" -> departmentId)
         .executeUpdate()
