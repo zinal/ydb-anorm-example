@@ -21,3 +21,8 @@ Thumbs.db
 
 # Coursier
 .coursier/
+.tmp-src
+
+*.bak
+*~
+~*
