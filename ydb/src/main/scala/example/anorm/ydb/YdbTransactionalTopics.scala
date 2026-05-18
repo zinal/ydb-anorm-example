@@ -1,8 +1,11 @@
 package example.anorm.ydb
 
+import scala.language.implicitConversions
+
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 import java.sql.Connection
+import java.util
 import java.util.concurrent.TimeUnit
 
 import scala.collection.mutable
@@ -12,6 +15,22 @@ import scala.util.Using
 import tech.ydb.topic.TopicClient
 import tech.ydb.topic.settings.{SendSettings, WriterSettings}
 import tech.ydb.topic.write.{Message, SyncWriter}
+
+/** One piece of payload for [[YdbTransactionalTopics.sendMessage]].
+  *
+  * Pass `String` or `Array[Byte]` arguments at the call site; the companion implicits convert
+  * strings with UTF-8 and copy byte arrays.
+  */
+final class SendSegment private (val bytes: Array[Byte])
+
+object SendSegment {
+
+  implicit def utf8String(text: String): SendSegment =
+    new SendSegment(text.getBytes(StandardCharsets.UTF_8))
+
+  implicit def byteArray(data: Array[Byte]): SendSegment =
+    new SendSegment(util.Arrays.copyOf(data, data.length))
+}
 
 /** One [[TopicClient]] per JDBC transaction with lazily created [[SyncWriter]] instances per
   * topic path, so you can publish to several topics before `commit` / `rollback`.
@@ -70,17 +89,14 @@ final class YdbTransactionalTopics private (
   def flush(topicPath: String): Unit =
     syncWriter(topicPath).flush()
 
-  def sendTransactionalAndFlush(topicPath: String, payload: Array[Byte]): Unit = {
-    enqueueTransactional(topicPath, payload)
+  /** Enqueues one message whose payload is all `segments` concatenated (each segment is UTF-8
+    * text or raw bytes via [[SendSegment]] implicits), then [[flush]].
+    */
+  def sendMessage(topicPath: String, segments: SendSegment*): Unit = {
+    val merged = segments.foldLeft(Array.emptyByteArray)((acc, seg) => acc ++ seg.bytes)
+    enqueueTransactional(topicPath, merged)
     flush(topicPath)
   }
-
-  def sendTransactionalAndFlushUtf8(
-      topicPath: String,
-      text: String,
-      charset: Charset = StandardCharsets.UTF_8
-  ): Unit =
-    sendTransactionalAndFlush(topicPath, text.getBytes(charset))
 
   override def close(): Unit = {
     writers.synchronized {

@@ -11,8 +11,9 @@ import java.util.concurrent.Executor
   *   YdbTopicPublishContext(myExecutorService, "payments-outbox")
   *
   * YdbTopicAnorm.withTopicsInJdbcTransaction(conn) { topics =>
-  *   topics.sendTransactionalAndFlushUtf8("topic-a", "hello")
-  *   topics.sendTransactionalAndFlushUtf8("topic-b", "world")
+  *   topics.sendMessage("topic-a", "hello")
+  *   topics.sendMessage("topic-b", "part1", "part2")
+  *   topics.sendMessage("topic-c", "head: ", Array(1, 2, 3).map(_.toByte))
   * }
   * }}}
   *
