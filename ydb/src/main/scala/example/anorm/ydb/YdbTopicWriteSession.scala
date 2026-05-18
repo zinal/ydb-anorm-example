@@ -23,7 +23,7 @@ import tech.ydb.topic.write.{Message, SyncWriter}
   *    `connection.unwrap(classOf[GrpcTransport])`.
   *  - Inside each JDBC transaction (`setAutoCommit(false)` … `commit` / `rollback`), bind each
   *    `send` to the driver’s current [[YdbTransaction]] from
-  *    `connection.unwrap(classOf[YdbTransaction]])`.
+  *    `connection.unwrap(classOf[YdbTransaction])`.
   *  - Close during application shutdown so the writer can stop cleanly.
   *
   * @param shutdownTimeoutSeconds upper bound passed to [[SyncWriter.shutdown]] in [[close]]
