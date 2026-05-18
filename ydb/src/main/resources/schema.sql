@@ -48,3 +48,5 @@ CREATE TABLE operations (
 );
 
 CREATE TOPIC anorm_topic_demo(CONSUMER anorm_spec_consumer);
+
+CREATE TOPIC anorm_topic_demo_secondary(CONSUMER anorm_spec_consumer_b);

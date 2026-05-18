@@ -1,45 +1,38 @@
 package example.anorm.ydb
 
 import java.sql.Connection
-import java.util.concurrent.Executor
 
 import anorm._
 import anorm.SqlParser.str
 
-/** Example transaction that mirrors `jdbc-basic`: read with Anorm, publish to a topic bound to
-  * the same YDB transaction, then perform a follow-up write.
+/** Example transaction: Anorm read, publish to two topics on the same YDB transaction, then update.
   *
-  * Requires topic `[[TransactionalTopicSample.TopicName]]` to exist (see `schema.sql`).
+  * Requires topics `[[TopicName]]` and `[[SecondaryTopicName]]` (see `schema.sql`).
+  *
+  * Supply `implicit val ... : YdbTopicPublishContext = YdbTopicPublishContext(executor, ProducerId)`
+  * (or any producer id) at the call site.
   */
 object TransactionalTopicSample {
 
-  /** Topic path used by the example and tests. */
   val TopicName: String = "anorm_topic_demo"
 
-  /** Default producer id for the sample (override with env `YDB_PRODUCER` in [[YdbTopicWriteSession]]). */
+  val SecondaryTopicName: String = "anorm_topic_demo_secondary"
+
   val ProducerId: String = "anorm-topic-sample"
 
-  /** Reads a department name, publishes a UTF-8 message to the topic, then updates `location`.
-    *
-    * @param compressionExecutor application thread pool passed into the topic client builder
-    */
+  /** Reads a department name, publishes to two topics, then sets `location` to `locationMarker`. */
   def runDemoTransaction(
       connection: Connection,
-      compressionExecutor: Executor,
       departmentId: Int,
       locationMarker: String
-  ): String =
-    YdbTopicAnorm.withTopicInJdbcTransaction(
-      connection,
-      compressionExecutor,
-      TopicName,
-      producerId = ProducerId
-    ) { (conn, topic) =>
-      implicit val c: Connection = conn
+  )(implicit ctx: YdbTopicPublishContext): String =
+    YdbTopicAnorm.withTopicsInJdbcTransaction(connection) { topics =>
+      implicit val c: Connection = topics.connection
       val name =
         SQL"SELECT name FROM departments WHERE id = $departmentId"
           .as(str("name").single)
-      topic.sendTransactionalAndFlushUtf8(s"department:$departmentId:$name\n")
+      topics.sendTransactionalAndFlushUtf8(TopicName, s"primary:department:$departmentId:$name\n")
+      topics.sendTransactionalAndFlushUtf8(SecondaryTopicName, s"secondary:dept:$departmentId\n")
       SQL("UPDATE departments SET location = {loc} WHERE id = {id}")
         .on("loc" -> locationMarker, "id" -> departmentId)
         .executeUpdate()

@@ -1,16 +1,14 @@
 package example.anorm.ydb
 
 import java.sql.Connection
-import java.util.concurrent.Executor
 
 import scala.util.control.NonFatal
 
 /** JDBC transaction helpers for Anorm alongside YDB topic writes.
   *
   * Topic clients and writers are created '''inside''' each transaction (see
-  * [[https://github.com/zinal/ydb-snippets/tree/main/apps/jdbc-basic ydb-snippets/apps/jdbc-basic]]),
-  * with a caller-supplied [[java.util.concurrent.Executor Executor]] passed into
-  * [[YdbTopicWriteSession.open]] for compression.
+  * [[https://github.com/zinal/ydb-snippets/tree/main/apps/jdbc-basic ydb-snippets/apps/jdbc-basic]]).
+  * Compression executor and producer id are supplied via implicit [[YdbTopicPublishContext]].
   */
 object YdbTopicAnorm {
 
@@ -33,31 +31,21 @@ object YdbTopicAnorm {
     }
   }
 
-  /** Starts a JDBC transaction, opens a per-transaction [[YdbTopicWriteSession]], runs `body`,
-    * commits on success, then closes the topic session (writer shutdown, client close).
+  /** Starts a JDBC transaction, opens [[YdbTransactionalTopics]] (one [[tech.ydb.topic.TopicClient]]
+    * shared by all topic paths in this transaction), runs `body`, commits, then shuts down all
+    * writers and closes the client.
     *
-    * Use `{ case (conn, topic) => implicit val c = conn; ... }` so Anorm and
-    * `topic.sendTransactionalAndFlushUtf8(...)(c)` share one [[Connection]].
+    * Requires an implicit [[YdbTopicPublishContext]] in scope (executor + producer id).
     */
-  def withTopicInJdbcTransaction[A](
-      connection: Connection,
-      compressionExecutor: Executor,
-      topicPath: String,
-      producerId: String = YdbTopicWriteSession.defaultProducerId,
-      writerShutdownSeconds: Long = 30L
-  )(body: (Connection, YdbTopicWriteSession) => A): A = {
+  def withTopicsInJdbcTransaction[A](connection: Connection, writerShutdownSeconds: Long = 30L)(
+      body: YdbTransactionalTopics => A
+  )(implicit ctx: YdbTopicPublishContext): A = {
     val previousAutoCommit = connection.getAutoCommit
     connection.setAutoCommit(false)
-    var session: YdbTopicWriteSession = null
+    var session: YdbTransactionalTopics = null
     try {
-      session = YdbTopicWriteSession.open(
-        topicPath,
-        connection,
-        compressionExecutor,
-        producerId,
-        writerShutdownSeconds
-      )
-      val result = body(connection, session)
+      session = YdbTransactionalTopics.open(connection, writerShutdownSeconds)
+      val result = body(session)
       connection.commit()
       result
     } catch {

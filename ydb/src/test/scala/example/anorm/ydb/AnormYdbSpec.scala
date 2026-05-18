@@ -96,6 +96,7 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
     super.beforeEach()
     withConnection { conn =>
       tryDropTopic(conn, TransactionalTopicSample.TopicName)
+      tryDropTopic(conn, TransactionalTopicSample.SecondaryTopicName)
       tryDrop(conn, "employee_projects")
       tryDrop(conn, "projects")
       tryDrop(conn, "operations")
@@ -964,14 +965,16 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
   // YDB topic + JDBC transaction (TransactionalTopicSample)
   // ---------------------------------------------------------------------------
 
-  test("TransactionalTopicSample - per-transaction TopicClient/SyncWriter with external executor") {
+  test("TransactionalTopicSample - multi-topic per JDBC txn (implicit publish context)") {
     val pool = Executors.newCachedThreadPool()
     try {
       val conn = openConnection()
       try {
         val marker = s"topic-demo-${UUID.randomUUID()}"
+        implicit val ydbTopicPublish: YdbTopicPublishContext =
+          YdbTopicPublishContext(pool, TransactionalTopicSample.ProducerId)
         val name =
-          TransactionalTopicSample.runDemoTransaction(conn, pool, departmentId = 1, locationMarker = marker)
+          TransactionalTopicSample.runDemoTransaction(conn, departmentId = 1, locationMarker = marker)
         assert(name === "Engineering")
         withConnection { implicit c =>
           val loc =
