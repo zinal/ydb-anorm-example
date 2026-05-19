@@ -989,4 +989,26 @@ class AnormYdbSpec extends AnyFunSuite with BeforeAndAfterAll with BeforeAndAfte
       catch { case _: InterruptedException => Thread.currentThread().interrupt() }
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // LargeResultSets
+  // ---------------------------------------------------------------------------
+
+  test("LargeResultSets - countRows streams 1M rows with fetch size 10000") {
+    withConnection { implicit c =>
+      assert(LargeResultSets.countRows() === 1_000_000L)
+    }
+  }
+
+  test("LargeResultSets - countUpTo stops early without scanning the full set") {
+    withConnection { implicit c =>
+      assert(LargeResultSets.countUpTo(12_345L) === 12_345L)
+    }
+  }
+
+  test("LargeResultSets - sampleRow reads one row without materializing the set") {
+    withConnection { implicit c =>
+      assert(LargeResultSets.sampleRow().isDefined)
+    }
+  }
 }
